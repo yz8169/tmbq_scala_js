@@ -2,17 +2,18 @@ package controllers
 
 import java.io.File
 import java.net.URLEncoder
+import java.nio.charset.Charset
 
 import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
 import akka.stream.Materializer
-import command.{CommandExec}
+import command.{CommandExec, ExecCommand}
 import dao._
 import javax.inject.Inject
 import org.apache.commons.io.FileUtils
 import org.apache.commons.lang3.StringUtils
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{AbstractController, ControllerComponents, WebSocket}
-import tool.Tool
+import tool.{FileTool, Tool}
 import utils.Utils
 
 import scala.collection.JavaConverters._
@@ -31,6 +32,7 @@ import scala.collection.parallel.ForkJoinTaskSupport
 import implicits.Implicits._
 import mission.MissionUtils
 import tool.Pojo.{CommandData, IndexData}
+
 import scala.language.postfixOps
 
 
@@ -56,6 +58,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       val outDir = tool.getUserMissionDir
       val missionDir = MissionUtils.getMissionDir(mission.id, outDir)
       val (tmpDir, resultDir) = (missionDir.workspaceDir, missionDir.resultDir)
+      val logFile = Tool.getLogFile(tmpDir.getParentFile)
       val dataDir = new File(tmpDir, "data")
       val tmpDataDir = new File(tmpDir, "tmpData")
       Utils.createDirectoryWhenNoExist(dataDir)
@@ -71,7 +74,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       compoundConfigTempFile.ref.moveTo(compoundConfigFile, replace = true)
       Utils.removeXlsxBlankLine(compoundConfigFile)
       val f = Future {
-        ZipUtil.unpack(file, tmpDataDir)
+        Utils.unpack(file, tmpDataDir)
         Utils.getAllFiles(tmpDataDir).foreach { file =>
           val destFile = new File(dataDir, file.getName.toLowerCase)
           FileUtils.copyFile(file, destFile)
@@ -89,7 +92,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         }
         val isIndexs = indexDatas.filter(x => x.index.startWithsIgnoreCase("is"))
 
-        val logFile = new File(tmpDir.getParent, "log.txt")
+        val logFile = Tool.getLogFile(tmpDir.getParentFile)
         val commandExecutor = CommandExec().parExec { b =>
           //is find peak
           Tool.isFindPeak(tmpDir, isIndexs, data.threadNum)
@@ -128,6 +131,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
           FileUtils.copyFileToDirectory(file, originalDataDir)
           "success"
         } else {
+          commandExecutor.errorInfo.toFile(logFile)
           "error"
         }
         val newMission = mission.copy(state = state, endTime = Some(new DateTime()))
@@ -135,7 +139,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       }.onComplete {
         case Failure(exception) =>
           exception.printStackTrace()
-          FileUtils.writeStringToFile(missionDir.logFile, exception.toString)
+          FileUtils.writeStringToFile(logFile, exception.toString)
           val newMission = mission.copy(state = "error", endTime = Some(new DateTime()))
           missionDao.update(newMission)
         case Success(x) =>
@@ -153,6 +157,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       val outDir = tool.getUserMissionDir
       val missionDir = MissionUtils.getMissionDir(mission.id, outDir)
       val (tmpDir, resultDir) = (missionDir.workspaceDir, missionDir.resultDir)
+      val logFile = Tool.getLogFile(tmpDir.getParentFile)
       val dataDir = new File(tmpDir, "data")
       val tmpDataDir = new File(tmpDir, "tmpData")
       Utils.createDirectoryWhenNoExist(dataDir)
@@ -168,7 +173,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       compoundConfigTempFile.ref.moveTo(compoundConfigFile, replace = true)
       Utils.removeXlsxBlankLine(compoundConfigFile)
       val f = Future {
-        ZipUtil.unpack(file, tmpDataDir)
+        Utils.unpack(file, tmpDataDir)
         Utils.getAllFiles(tmpDataDir).foreach { file =>
           val destFile = new File(dataDir, file.getName.toLowerCase)
           FileUtils.copyFile(file, destFile)
@@ -185,8 +190,6 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
           IndexData(map("index"), map("compound"))
         }
         val isIndexs = indexDatas.filter(x => x.index.startWithsIgnoreCase("is"))
-
-        val logFile = new File(tmpDir.getParent, "log.txt")
         val commandExecutor = CommandExec().parExec { b =>
           //is find peak
           Tool.isFindPeak(tmpDir, isIndexs, data.threadNum)
@@ -225,6 +228,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
           FileUtils.copyFileToDirectory(file, originalDataDir)
           "success"
         } else {
+          commandExecutor.errorInfo.toFile(logFile)
           "error"
         }
         val newMission = mission.copy(state = state, endTime = Some(new DateTime()))
@@ -232,7 +236,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       }.onComplete {
         case Failure(exception) =>
           exception.printStackTrace()
-          FileUtils.writeStringToFile(missionDir.logFile, exception.toString)
+          FileUtils.writeStringToFile(logFile, exception.toString)
           val newMission = mission.copy(state = "error", endTime = Some(new DateTime()))
           missionDao.update(newMission)
         case Success(x) =>
@@ -245,23 +249,14 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
   def newAgilentMissionBefore = Action { implicit request =>
     val missionName = s"project_${tool.generateMissionName}"
     Ok(views.html.user.newAgilentMission(missionName))
-
   }
 
   def fileCheck = Action(parse.multipartFormData) { implicit request =>
     val data = formTool.fileNamesForm.bindFromRequest().get
     val fileNames = data.fileNames.filter(StringUtils.isNotBlank(_)).map(Utils.getPrefix(_)).map(_.toLowerCase())
     val tmpDir = tool.createTempDirectory("tmpDir")
-    val compoundConfigFile = new File(tmpDir, "compound_config.xlsx")
-    val compoundConfigTempFile = request.body.file("compoundConfigFile").get
-    compoundConfigTempFile.ref.moveTo(compoundConfigFile, replace = true)
-    val sampleConfigFile = new File(tmpDir, "sample_config.xlsx")
-    val sampleConfigTempFile = request.body.file("sampleConfigFile").get
-    sampleConfigTempFile.ref.moveTo(sampleConfigFile, replace = true)
-    var myMessage = tool.compoundFileCheck(compoundConfigFile, sampleConfigFile)
-    if (myMessage.valid) {
-      myMessage = tool.sampleFileCheck(sampleConfigFile, fileNames)
-    }
+    val myTmpDir = Tool.getCheckDataDir(tmpDir)
+    val myMessage = FileTool.fileCheck(myTmpDir, fileNames.toList)
     tool.deleteDirectory(tmpDir)
     Ok(Json.obj("valid" -> myMessage.valid, "message" -> myMessage.message))
   }
@@ -469,6 +464,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         FileUtils.writeLines(argsFile, lines.asJava)
         tool.productBaseRFile(tmpDir)
       }
+      val logFile = Tool.getLogFile(tmpDir.getParentFile)
 
       val command =
         s"""
@@ -480,7 +476,10 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         }.map { b =>
           FileUtils.copyDirectoryToDirectory(new File(tmpDir, "plot_peaks"), resultDir)
         }
-        if (commandExec.isSuccess) "success" else "error"
+        if (commandExec.isSuccess) "success" else {
+          commandExec.errorInfo.toFile(logFile)
+          "error"
+        }
       }.map { state =>
         val newMission = mission.copy(state = state, endTime = Some(new DateTime()))
         adjustMissionDao.update(newMission)

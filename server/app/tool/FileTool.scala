@@ -3,7 +3,7 @@ package tool
 import java.io.File
 
 import org.apache.commons.lang3.StringUtils
-import tool.Pojo.MyDataDir
+import tool.Pojo.{MyCheckDataDir, MyDataDir}
 import implicits.Implicits._
 
 
@@ -12,9 +12,7 @@ import implicits.Implicits._
  */
 object FileTool {
 
-  def fileCheck(myTmpDir: MyDataDir) = {
-    val fileNames = myTmpDir.tmpDataDir.allFiles.map(_.getName).filter(StringUtils.isNotBlank(_)).
-      map(_.fileNamePrefix).map(_.toLowerCase())
+  def fileCheck(myTmpDir: MyCheckDataDir,fileNames:List[String]) = {
     val compoundConfigFile = myTmpDir.compoundConfigFile
     val sampleConfigFile = myTmpDir.sampleConfigExcelFile
     FileTool.compoundFileCheck(compoundConfigFile, sampleConfigFile).andThen { b =>

@@ -1,8 +1,8 @@
 package tool
 
 import cats.data.Validated
-import org.apache.commons.lang3.StringUtils
 import implicits.Implicits._
+import org.apache.commons.lang3.StringUtils
 
 /**
  * Created by Administrator on 2019/12/20
@@ -11,22 +11,22 @@ class CompoundFileValidTool(lines: List[List[String]]) {
 
   val headers = lines.head.map(_.toLowerCase)
   val hasHeaders = List("index", "compound", "function", "mass", "rt", "rtlw", "rtrw", "peak_location",
-    "response", "is_correction", "std", "polynomial_type", "origin", "ws4pp", "i4pp", "rs4rs", "mp4rs", "snr4pp",
-    "lod", "loq", "nups4pp", "ndowns4pp", "ws4pa", "lp4e", "rp4e", "mp4e", "bline", "rmode", "rmis", "rmratio")
-  val intHeaders = List("ws4pp", "i4pp", "mp4rs", "snr4pp", "nups4pp", "ndowns4pp", "lp4e", "rp4e", "mp4e",
+    "response", "is_correction", "std", "polynomial_type", "origin", "ws4pp", "i4pp", "rs4rs", "mp4rs", "snr4pp","npt",
+    "lod", "loq", "nups4pp", "ndowns4pp", "ws4pa", "lp4e", "rp4e", "mp4e", "bline","bline4pa", "rmode", "rmis", "rmratio")
+  val intHeaders = List("ws4pp", "i4pp", "mp4rs", "snr4pp","npt", "nups4pp", "ndowns4pp", "lp4e", "rp4e", "mp4e",
     "function")
-  val fileInfo = "compound info config file"
+  val fileInfo = "物质信息配置文件"
 
   def validHeadersRepeat = {
     val repeatHeaders = headers.diff(headers.distinct)
     val valid = repeatHeaders.isEmpty
-    Validated.cond(valid, true, s"${fileInfo} header ${repeatHeaders.head} is repeated!")
+    Validated.cond(valid, true, s"${fileInfo}表头 ${repeatHeaders.head} 重复!")
   }
 
   def validHeadersExist = {
     val noExistHeaders = hasHeaders.diff(headers)
     val valid = noExistHeaders.isEmpty
-    Validated.cond(valid, true, s"${fileInfo} header ${noExistHeaders.head} is not exist!")
+    Validated.cond(valid, true, s"${fileInfo}表头 ${noExistHeaders.head} 不存在!")
   }
 
   def validColumnsRepeat = {
@@ -39,7 +39,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
         val repeatValue = repeatValues.head
         val j = headers.indexOf(header)
         val i = totalColumns.lastIndexOf(repeatValue)
-        s"${fileInfo} value is repeated in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列重复!"
       } else ""
       (inValid, inMessage)
     }
@@ -60,7 +60,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
         val value = op.get
         val j = headers.indexOf(header)
         val i = totalColumns.lastIndexOf(value)
-        s"${fileInfo} value must be odd numbers in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列必须为奇数!"
       } else ""
       (inValid, inMessage)
     }
@@ -80,7 +80,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
         val value = op.get
         val j = headers.indexOf(header)
         val i = totalColumns.lastIndexOf(value)
-        s"${fileInfo} value must be natural numbers in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列必须为自然数!"
       } else ""
       (inValid, inMessage)
     }
@@ -101,7 +101,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
         val value = op.get
         val j = headers.indexOf(header)
         val i = totalColumns.lastIndexOf(value)
-        s"${fileInfo} value must be real number in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列必须为实数!"
       } else ""
       (inValid, inMessage)
     }
@@ -116,6 +116,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       "polynomial_type" -> List("linear", "quadratic"),
       "origin" -> List("exclude", "include"),
       "bline" -> List("yes", "no"),
+      "bline4pa" -> List("yes", "no"),
       "rmode" -> List("yes", "no"))
 
     val columns = factorMap.keySet
@@ -129,7 +130,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
         val value = op.get
         val j = headers.indexOf(header)
         val i = totalColumns.lastIndexOf(value)
-        s"${fileInfo} value must be one of ${factorMap(header).mkString("、")} in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列只能为(${factorMap(header).mkString("、")})中的一个!"
       } else ""
       (inValid, inMessage)
     }
@@ -143,7 +144,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val columns = tmpColumns
       val inValid = columns.size <= headers.size
       val inMessage = if (!inValid) {
-        s"${fileInfo} column number is overmuch in ${i + 2}th row!"
+        s"${fileInfo}第${i + 2}行列数不正确,存在多余列!"
       } else ""
       (inValid, inMessage)
     }
@@ -152,21 +153,13 @@ class CompoundFileValidTool(lines: List[List[String]]) {
     Validated.cond(valid, true, messages.head)
   }
 
-  def validRowNum = {
-    val valid = lines.size <= 101
-    val message = if (!valid) {
-      s"Thank you for using. The academic version cannot process large dataset with more than 100 samples or compounds. Please contact us for more information!"
-    } else ""
-    Validated.cond(valid, true, message)
-  }
-
   def validMp4rsMoreMp4e = {
     val info = lines.drop(1).zipWithIndex.map { case (tmpColumns, i) =>
       val columns = tmpColumns.padTo(headers.size, "")
       val lineMap = headers.zip(columns).toMap
       val inValid = lineMap("mp4rs").toDouble > lineMap("mp4e").toDouble
       val inMessage = if (inValid) {
-        s"${fileInfo} mp4e value must be larger than mp4rs value in ${i + 2}th row!"
+        s"${fileInfo}第${i + 2}行mp4e必须大于等于mp4rs!"
       } else ""
       (!inValid, inMessage)
     }
@@ -185,7 +178,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val value = op.get
       val j = headers.indexOf(header)
       val i = totalColumns.lastIndexOf(value)
-      s"${fileInfo} value must not be special characters in ${i + 2}th row,${j + 1}th column!"
+      s"${fileInfo}第${i + 2}行第${j + 1}列出现特殊字符!"
     } else ""
     Validated.cond(inValid, true, inMessage)
   }
@@ -202,7 +195,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val value = op.get
       val j = headers.indexOf(header)
       val i = totalColumns.lastIndexOf(value)
-      s"${fileInfo} value must be real number or a positive real number pair connected by the greater-than sign in ${i + 2}th row,${j + 1}th column!"
+      s"${fileInfo}第${i + 2}行第${j + 1}列必须为实数或以'>'分隔的两个实数!"
     } else ""
     Validated.cond(inValid, true, inMessage)
   }
@@ -223,7 +216,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val value = op.get
       val j = headers.indexOf(header)
       val i = totalColumns.lastIndexOf(value)
-      s"""${fileInfo.capitalize} value must be "none" or the specific index of an IS (started by IS) if IS correction is required in ${i + 2}th row,${j + 1}th column!"""
+      s"""${fileInfo}第${i + 2}行第${j + 1}列必须为none或者某个存在的内标化合物的index列名称!"""
     } else ""
     Validated.cond(inValid, true, inMessage)
   }
@@ -239,7 +232,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val value = op.get
       val j = headers.indexOf(header)
       val i = totalColumns.lastIndexOf(value)
-      s"${fileInfo} value must be a real number in the range of 0-1 in ${i + 2}th row,${j + 1}th column!"
+      s"${fileInfo}第${i + 2}行第${j + 1}列必须为0-1之间的实数!"
     } else ""
     Validated.cond(inValid, true, inMessage)
   }
@@ -258,7 +251,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val b = lineMap("rmode") == "yes" && !(indexs.contains(column))
       val inMessage = if (b) {
         val j = headers.indexOf(header)
-        s"${fileInfo} value must be the specific index of an existential IS in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列必须为某个存在的内标化合物的index列名称!"
       } else ""
       (!b, inMessage)
     }
@@ -275,7 +268,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       }.headOption
       val inMessage = if (op.nonEmpty) {
         val j = columns.indexOf(op.get)
-        s"${fileInfo} value must not be empty in ${i + 2}th row ${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列为空!"
       } else ""
       (op.isEmpty, inMessage)
     }
@@ -293,7 +286,7 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val b = lineMap("rmode") == "yes" && !(column == "none" || column.isDouble)
       val inMessage = if (b) {
         val j = headers.indexOf(header)
-        s"${fileInfo} value must be real number in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列必须为实数!"
       } else ""
       (!b, inMessage)
     }
@@ -312,9 +305,9 @@ class CompoundFileValidTool(lines: List[List[String]]) {
       val b2 = (lineMap("index").startsWith("is") && !column.isDouble)
       val j = headers.indexOf(header)
       val inMessage = if (b1) {
-        s"${fileInfo} value must be exist in sample config info file in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列浓度信息在样品信息配置表中不存在!"
       } else if (b2) {
-        s"${fileInfo} value must be real number because the sample is standard sample in ${i + 2}th row,${j + 1}th column!"
+        s"${fileInfo}第${i + 2}行第${j + 1}列，因为此样品为内标化合物，所以必须为实数!"
       } else ""
       (!b1 && !b2, inMessage)
     }
@@ -364,8 +357,45 @@ object CompoundFileValidTool {
       validRs4rsColumn
     }.andThen { b =>
       validMp4rsMoreMp4e
+    }
+
+  }
+
+  def adminValid(lines: List[List[String]]) = {
+    val compoundFileValidTool = new CompoundFileValidTool(lines)
+    import compoundFileValidTool._
+    validHeadersRepeat.andThen { b =>
+      validHeadersExist
     }.andThen { b =>
-      validRowNum
+      validHeadersExist
+    }.andThen { b =>
+      validColumnNum
+    }.andThen { b =>
+      validNonEmpty
+    }.andThen { b =>
+      validColumnsRepeat
+    }.andThen { b =>
+      validCompoundColumn
+    }.andThen { b =>
+      validIntColumn
+    }.andThen { b =>
+      validMassColumn
+    }.andThen { b =>
+      validDoubleColumn
+    }.andThen { b =>
+      validFactorColumn
+    }.andThen { b =>
+      validOddColumn
+    }.andThen { b =>
+      validRmratioColumn
+    }.andThen { b =>
+      validIsCorrectionColumn
+    }.andThen { b =>
+      validRmisColumn
+    }.andThen { b =>
+      validRs4rsColumn
+    }.andThen { b =>
+      validMp4rsMoreMp4e
     }
 
   }

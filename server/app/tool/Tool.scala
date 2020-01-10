@@ -15,7 +15,7 @@ import org.apache.commons.io.FileUtils
 import org.apache.commons.lang3.StringUtils
 import org.apache.poi.ss.usermodel.{Cell, DateUtil, FillPatternType, IndexedColors}
 import org.apache.poi.xssf.usermodel.{XSSFColor, XSSFWorkbook}
-import play.api.mvc.RequestHeader
+import play.api.mvc.{MultipartFormData, Request, RequestHeader}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -25,7 +25,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.parallel.CollectionConverters._
 import scala.collection.parallel.ForkJoinTaskSupport
 import implicits.Implicits._
-import tool.Pojo.{CommandData, IndexData}
+import org.zeroturnaround.zip.ZipUtil
+import play.api.libs.Files.TemporaryFile
+import tool.Pojo.{CommandData, IndexData, MyCheckDataDir, MyDataDir}
 
 
 
@@ -372,208 +374,6 @@ class Tool @Inject()(modeDao: ModeDao) {
     s"attachment; filename*=utf-8''${encodeUrl}"
   }
 
-  case class MyMessage(valid: Boolean, message: String)
-
-  def compoundFileCheck(file: File, sampleConfigFile: File): MyMessage = {
-    val sampleHeaders = Utils.xlsx2Lines(sampleConfigFile).map(_.toLowerCase()).head.split("\t")
-    val lines = Utils.xlsx2Lines(file).map(_.toLowerCase())
-    val headers = lines.head.split("\t").map(_.toLowerCase)
-    val repeatHeaders = headers.diff(headers.distinct)
-    if (repeatHeaders.nonEmpty) {
-      return MyMessage(false, s"物质信息配置文件表头 ${repeatHeaders.head} 重复!")
-    }
-    val hasHeaders = ArrayBuffer("index", "compound", "function", "mass", "rt", "rtlw", "rtrw", "peak_location",
-      "response", "is_correction", "std", "polynomial_type", "origin", "ws4pp", "i4pp", "rs4rs", "mp4rs", "snr4pp",
-      "lod", "loq", "nups4pp", "ndowns4pp", "ws4pa", "lp4e", "rp4e", "mp4e", "bline", "rmode", "rmis", "rmratio")
-    val noExistHeaders = hasHeaders.diff(headers)
-    if (noExistHeaders.nonEmpty) {
-      return MyMessage(false, s"物质信息配置文件表头 ${noExistHeaders.head} 不存在!")
-    }
-
-    val repeatColumns = ArrayBuffer("index", "compound")
-    val repeatMap = repeatColumns.map(x => (x, mutable.Set[String]())).toMap
-    val factorMap = Map("peak_location" -> ArrayBuffer("nearest", "largest", "first", "all"),
-      "response" -> ArrayBuffer("height", "area"),
-      "polynomial_type" -> ArrayBuffer("linear", "quadratic"),
-      "origin" -> ArrayBuffer("exclude", "include"),
-      "bline" -> ArrayBuffer("yes", "no"),
-      "rmode" -> ArrayBuffer("yes", "no"),
-
-    )
-    val indexs = lines.drop(1).map { line =>
-      val columns = line.split("\t")
-      val lineMap = headers.zip(columns).toMap
-      lineMap("index")
-    }.filter(_.startsWith("is"))
-    lines.drop(1).zipWithIndex.foreach { case (line, i) =>
-      val columns = line.split("\t").padTo(headers.size, "")
-      val lineMap = headers.zip(columns).toMap
-      if (columns.size > headers.size) {
-        return MyMessage(false, s"物质信息配置文件第${i + 2}行列数不正确,存在多余列!")
-      }
-      columns.zipWithIndex.foreach { case (tmpColumn, j) =>
-        val column = tmpColumn.toLowerCase()
-        val header = headers(j)
-
-        if (header == "mrt") {
-          if (!Utils.isInt(column) || column.toInt < 0) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为自然数!")
-          }
-        }
-
-        if (StringUtils.isEmpty(column)) {
-          return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列为空!")
-        }
-        if (repeatColumns.contains(header)) {
-          if (repeatMap(header).contains(column)) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列重复!")
-          } else repeatMap(header) += column
-        }
-        if (header == "compound") {
-          val ILLEGAL_CHARACTERS = Array('/', '\n', '\r', '\t', '\u0000', '\f', '`', '?', '*', '\\', '<', '>', '|', '\"', ':')
-          if (column.exists(ILLEGAL_CHARACTERS.contains(_))) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列出现特殊字符!")
-          }
-        }
-        val intHeaders = ArrayBuffer("ws4pp", "i4pp", "mp4rs", "snr4pp", "nups4pp", "downs4pp", "lp4e", "rp4e", "mp4e",
-          "function")
-        if (intHeaders.contains(header)) {
-          if (!Utils.isInt(column) || column.toInt < 0) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为自然数!")
-          }
-        }
-        if (header == "mass") {
-          val values = column.split(">")
-          if (!values.forall(x => Utils.isDouble(x))) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为实数或以'>'分隔的两个实数!")
-          }
-        }
-        val doubleColumns = ArrayBuffer("rt", "rtlw", "rtrw", "lod", "loq")
-        if (doubleColumns.contains(header)) {
-          if (!Utils.isDouble(column)) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为实数!")
-          }
-        }
-        if (factorMap.keySet.contains(header)) {
-          if (!factorMap(header).contains(column)) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列只能为(${factorMap(header).mkString("、")})中的一个!")
-          }
-        }
-        val oddColumns = ArrayBuffer("ws4pp", "ws4pa")
-        if (oddColumns.contains(header)) {
-          if (!Utils.isInt(column) || column.toInt < 0 || column.toInt % 2 == 0) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为奇数!")
-          }
-        }
-        if (header == "rmratio") {
-          if (lineMap("rmode") == "yes" && !(column == "none" || Utils.isDouble(column))) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为实数!")
-          }
-        }
-        if (header == "is_correction") {
-          if (!(column == "none" || indexs.contains(column))) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为none或者某个存在的内标化合物的index列名称!")
-          }
-        }
-        if (header == "rmis") {
-          if (lineMap("rmode") == "yes" && !(indexs.contains(column))) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为某个存在的内标化合物的index列名称!")
-          }
-        }
-        if (header == "std") {
-          if (!lineMap("index").startsWith("is") && !sampleHeaders.contains(column)) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列浓度信息在样品信息配置表中不存在!")
-          }
-          if ((lineMap("index").startsWith("is") && !Utils.isDouble(column))) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列，因为此样品为内标化合物，所以必须为实数!")
-          }
-        }
-        if (header == "rs4rs") {
-          if (!Utils.isDouble(column) || column.toDouble > 1 || column.toDouble < 0) {
-            return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列必须为0-1之间的实数!")
-          }
-        }
-      }
-      if (lineMap("mp4rs").toDouble > lineMap("mp4e").toDouble) {
-        return MyMessage(false, s"物质信息配置文件第${i + 2}行mp4e必须大于等于mp4rs!")
-      }
-
-    }
-    MyMessage(true, "")
-  }
-
-  def sampleFileCheck(file: File, fileNames: Seq[String]): MyMessage = {
-    val lines = Utils.xlsx2Lines(file).map(_.toLowerCase())
-    val headers = lines.head.split("\t").map(_.toLowerCase)
-    if (headers.size < 4) {
-      return MyMessage(false, s"样品信息配置文件列数必须大于等于4!")
-    }
-    val repeatHeaders = headers.diff(headers.distinct)
-    if (repeatHeaders.nonEmpty) {
-      return MyMessage(false, s"样品信息配置文件表头 ${repeatHeaders.head} 重复!")
-    }
-    val hasHeaders = ArrayBuffer("batch", "file name", "sample type")
-    val noExistHeaders = hasHeaders.diff(headers)
-    if (noExistHeaders.nonEmpty) {
-      return MyMessage(false, s"样品信息配置文件表头 ${noExistHeaders.head} 不存在!")
-    }
-    val repeatColumns = ArrayBuffer("file name")
-    val repeatMap = repeatColumns.map(x => (x, mutable.Set[String]())).toMap
-    val factorMap = Map(
-      "sample type" -> ArrayBuffer("standard", "analyte")
-    )
-    case class BatchData(batch: String, kind: String)
-    val batchs = lines.drop(1).map { line =>
-      val columns = line.split("\t")
-      val lineMap = headers.zip(columns).toMap
-      BatchData(lineMap("batch"), lineMap("sample type"))
-    }.groupBy(_.batch)
-    batchs.foreach { case (batch, batchDatas) =>
-      val standrads = batchDatas.filter(_.kind == "standard")
-      val analytes = batchDatas.filter(_.kind == "analyte")
-      if (standrads.size < 2) {
-        return MyMessage(false, s"样品信息配置文件batch${batch}标样不够(至少两个)!")
-      }
-      if (analytes.size < 1) {
-        return MyMessage(false, s"样品信息配置文件batch${batch}待测样不够(至少1个)!")
-      }
-    }
-
-    lines.drop(1).zipWithIndex.foreach { case (line, i) =>
-      val columns = line.split("\t")
-      if (columns.size > headers.size) {
-        return MyMessage(false, s"样品信息配置文件第${i + 2}行列数不正确,存在多余列!")
-      }
-      val lineMap = headers.zip(columns).toMap
-      columns.zipWithIndex.foreach { case (tmpColumn, j) =>
-        val column = tmpColumn.toLowerCase()
-        val header = headers(j)
-        if (hasHeaders.contains(header)) {
-          if (StringUtils.isEmpty(column)) {
-            return MyMessage(false, s"样品信息配置文件第${i + 2}行第${j + 1}列为空!")
-          }
-        }
-        if (repeatColumns.contains(header)) {
-          if (repeatMap(header).contains(column)) {
-            return MyMessage(false, s"样品信息配置文件第${i + 2}行第${j + 1}列重复!")
-          } else repeatMap(header) += column
-        }
-        if (factorMap.keySet.contains(header)) {
-          if (!factorMap(header).contains(column)) {
-            return MyMessage(false, s"样品信息配置文件第${i + 2}行第${j + 1}列只能为(${factorMap(header).mkString("、")})中的一个!")
-          }
-        }
-        if (header == "file name") {
-          if (!fileNames.contains(column)) {
-            return MyMessage(false, s"样品信息配置文件第${i + 2}行第${j + 1}列文件名不存在!")
-          }
-        }
-      }
-    }
-    MyMessage(true, "")
-  }
-
-
 }
 
 object Tool {
@@ -671,6 +471,36 @@ object Tool {
     }
     CommandData(tmpDir, List(command))
 
+  }
+
+  def getDataDir(dataDir: File)(implicit request: Request[MultipartFormData[TemporaryFile]]) = {
+    val dataFile = new File(dataDir, "data.zip")
+    WebTool.fileMove("dataFile", dataFile)
+    val sampleConfigFile = new File(dataDir, "sample_config.xlsx")
+    WebTool.fileMove("sampleConfigFile", sampleConfigFile)
+    sampleConfigFile.removeEmptyLine
+    val compoundConfigFile = new File(dataDir, "compound_config.xlsx")
+    WebTool.fileMove("compoundConfigFile", compoundConfigFile)
+    compoundConfigFile.removeEmptyLine
+    val tmpDataDir = new File(dataDir, "tmpData").reCreateDirectoryWhenExist
+    ZipUtil.unpack(dataFile, tmpDataDir)
+    MyDataDir(dataDir, tmpDataDir, dataFile, sampleConfigFile, compoundConfigFile)
+  }
+
+  def getCheckDataDir(dataDir: File)(implicit request: Request[MultipartFormData[TemporaryFile]]) = {
+    val sampleConfigFile = new File(dataDir, "sample_config.xlsx")
+    WebTool.fileMove("sampleConfigFile", sampleConfigFile)
+    sampleConfigFile.removeEmptyLine
+    val compoundConfigFile = new File(dataDir, "compound_config.xlsx")
+    WebTool.fileMove("compoundConfigFile", compoundConfigFile)
+    compoundConfigFile.removeEmptyLine
+    MyCheckDataDir(dataDir, sampleConfigFile, compoundConfigFile)
+  }
+
+  def getLogFile(dir: File) = {
+    val file = new File(dir, "log.txt")
+    "Run successfully!".toFile(file)
+    file
   }
 
 

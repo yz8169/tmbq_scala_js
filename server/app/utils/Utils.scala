@@ -2,6 +2,7 @@ package utils
 
 import java.io.{File, FileInputStream, FileOutputStream}
 import java.lang.reflect.Field
+import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 
 import org.apache.commons.io.{FileUtils, IOUtils}
@@ -9,6 +10,7 @@ import org.apache.commons.lang3.StringUtils
 import org.apache.poi.ss.usermodel.{Cell, DateUtil}
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.joda.time.DateTime
+import org.zeroturnaround.zip.ZipUtil
 //import org.apache.commons.math3.stat.StatUtils
 //import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation
 //import org.saddle.io._
@@ -268,6 +270,15 @@ object Utils {
       FileUtils.deleteDirectory(direcotry)
     } catch {
       case _ =>
+    }
+  }
+
+  def unpack(file: File, dir: File) = {
+    try {
+      ZipUtil.unpack(file, dir)
+    } catch {
+      case e: Exception =>
+        ZipUtil.unpack(file, dir, Charset.forName("GBK"))
     }
   }
 
