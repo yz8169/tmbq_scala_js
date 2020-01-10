@@ -1,0 +1,294 @@
+@()(implicit request: RequestHeader)
+@main("浓度单位转换")("unitConversion") {
+
+	<div class="page-content">
+
+		<div class="page-bar">
+			<ul class="page-breadcrumb">
+				<li>
+					<i class="fa fa-recycle"></i>
+					<a href="">浓度单位转换</a>
+				</li>
+			</ul>
+		</div>
+
+		<div class="row-fluid">
+			<div class="row">
+				<div class="col-md-12 col-sm-12">
+					<div class="portlet blue-madison box">
+						<div class="portlet-title">
+							<div class="caption">
+								浓度单位转换
+							</div>
+						</div>
+
+						<div class="portlet-body">
+
+							<form id="form" class=" form-horizontal" accept-charset="UTF-8"
+							method="post" style="margin-top: 30px;" action="@routes.ToolController.unitConversion()">
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">待转换文件（*.xlsx）:</label>
+									<div class="col-sm-8">
+										<input id="input-1" type="file" class="file control-label" name="file"
+										data-show-preview="false" accept=".xlsx"
+										data-show-upload="false" >
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">从第几列开始:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="fromC" id="fromC" value="1">
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">单位:</label>
+									<div class="col-sm-2" >
+										<div class='radio ' id='unit1'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='unit2'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='unit3'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='unit4'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='unit5'></div>
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">转换为:</label>
+									<div class="col-sm-2" >
+										<div class='radio ' id='toUnit1'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='toUnit2'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='toUnit3'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='toUnit4'></div>
+									</div>
+									<div class="col-sm-2" >
+										<div class='radio ' id='toUnit5'></div>
+									</div>
+								</div>
+
+								<div class="form-group form-horizontal">
+									<div class="actions col-sm-offset-2 col-sm-2">
+										<button type="button" class="btn btn-primary" style="width: 90%;" id="search" onclick="myRun()">
+											开始运行</button>
+									</div>
+								</div>
+
+							</form>
+
+
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+			var units1 = [
+				"ug/L",//10^6
+				"ng/mL",//10^6,
+				"ug/mL",//10^3
+				"mg/mL",//1
+				"ug/uL",//1
+				"g/mL"//10^-3
+			]
+			var units2 = [
+				"nM",//10^9
+				"uM",//10^6
+				"mM"//10^3
+			]
+			var units3 = [
+				"nmol/g",//10^6
+				"pmol/mg",//10^6,
+				"nmol/mg",//10^3
+				"umol/g",//10^3,
+				"umol/mg"//1
+			]
+			var units4 = [
+				"ng/g",//10^6,
+				"ug/g",//10^3
+				"mg/g"//1
+			]
+			var units5 = [
+				"ppt",//10^9,
+				"ppb",//10^6,
+				"ppm"//10^3
+			]
+			var units = [
+				units1,
+				units2,
+				units3,
+				units4,
+				units5
+			]
+
+			function getUnitHtml(units, name) {
+				var unitHtml = ""
+				for (var i = units.length - 1; i >= 0; i--) {
+					unitHtml += "<label style='margin-right: 15px;width: 250px;'>" +
+							"<input type='radio' name='" + name + "'   value='" + units[i] + "'>" + units[i] +
+							"</label>"
+				}
+				return unitHtml
+			}
+
+			$(function () {
+				$(units).each(function (i, v) {
+					var unitHtml = getUnitHtml(v, "unit")
+					$("#unit" + (i + 1)).html(unitHtml)
+					var toUnitHtml = getUnitHtml(v, "toUnit")
+					$("#toUnit" + (i + 1)).html(toUnitHtml)
+				})
+				$("#unit1").find("input:first").attr("checked", true)
+				$("#toUnit1").find("input:first").attr("checked", true)
+
+				bootstrapValidator()
+			})
+
+			function base642binaryArray(content) {
+				var byteCharacters = atob(content);
+				var byteArrays = [];
+				var sliceSize = 512
+				for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+					var slice = byteCharacters.slice(offset, offset + sliceSize);
+					var byteNumbers = new Array(slice.length);
+					for (var i = 0; i < slice.length; i++) {
+						byteNumbers[i] = slice.charCodeAt(i);
+					}
+					var byteArray = new Uint8Array(byteNumbers);
+					byteArrays.push(byteArray);
+				}
+				return byteArrays
+			}
+
+			function downloadXlsx(xlsxData) {
+				var fileName = "result.xlsx"
+				var byteArrays = base642binaryArray(xlsxData)
+				var blob = new Blob(byteArrays, {
+					type: "application/vnd.ms-excel"
+				})
+				saveAs(blob, fileName)
+			}
+
+			function getFormData(formId) {
+				var formData = new FormData()
+				$("#" + formId).find('input[name][type!="file"], select[name], textarea[name]').each(function (i, e) {
+					if ($(e).attr('type') == 'checkbox' || $(e).attr('type') == 'radio') {
+						if ($(e).is(':checked')) {
+							formData.append($(e).attr('name'), $(e).val());
+						}
+					} else {
+						formData.append($(e).attr('name'), $(e).val());
+					}
+				});
+				$("#" + formId).find('input[name][type="file"]').each(function (i, e) {
+					if ($(e)[0].files.length > 0) {
+						formData.append($(e).attr('name'), $(e)[0].files[0]);
+					}
+				});
+				return formData
+			}
+
+			function myRun() {
+				var form = $("#form")
+				var formData = getFormData("form")
+				var fv = form.data("bootstrapValidator")
+				fv.validate()
+				if (fv.isValid()) {
+					var element = "<div id='content'><span id='info'>" + zhRunning + "</span>&nbsp;<img class='runningImage' src='@routes.Assets.at("images/running2.gif")' style='width: 30px;height: 20px;'></div>"
+					var index = layer.alert(element, {
+						skin: 'layui-layer-molv'
+						, closeBtn: 0,
+						title: zhInfo,
+						btn: []
+					});
+					$.ajax({
+						url: "@routes.ToolController.unitConversion()",
+						type: "post",
+						enctype: 'multipart/form-data',
+						processData: false,
+						contentType: false,
+						data: formData,
+						cache: false,
+						success: function (data) {
+							layer.close(index)
+							if (!data.valid) {
+								swal("Error", data.message, "error")
+							} else {
+								downloadXlsx(data.data)
+							}
+						}
+					});
+
+				}
+			}
+
+			$(".file").fileinput({
+				showPreview: false,
+				browseLabel: "选择...",
+				removeLabel: "删除文件",
+				language: "zh"
+			});
+
+			function bootstrapValidator() {
+				var infinityNumber = Number.MAX_VALUE
+				$('#form').bootstrapValidator({
+					framework: 'bootstrap',
+					icon: {
+						valid: 'glyphicon glyphicon-ok',
+						invalid: 'glyphicon glyphicon-remove',
+						validating: 'glyphicon glyphicon-refresh'
+					},
+					fields: {
+						file: {
+							validators: {
+								notEmpty: {
+									message: '待转换文件不能为空！'
+								},
+								file: {
+									extension: 'xlsx',
+									message: '待转换文件格式不正确！'
+								}
+							}
+						},
+						fromC: {
+							validators: {
+								notEmpty: {
+									message: '列数不能为空！'
+								},
+								integer: {
+									message: '列数必须为整数！'
+								},
+								between: {
+									min: 1,
+									max: infinityNumber,
+									message: "列数必须大于0！"
+								}
+							}
+						},
+
+					}
+
+				});
+			}
+
+
+	</script>
+
+
+}

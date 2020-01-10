@@ -1,0 +1,294 @@
+@(missionName: String, missionId: Option[Int])(implicit request: RequestHeader)
+@main("参数优化")("paramAdjust") {
+
+	<div class="page-content">
+
+		<div class="page-bar">
+			<ul class="page-breadcrumb">
+				<li>
+					<i class="fa fa-wrench"></i>
+					<a href="">参数优化</a>
+				</li>
+			</ul>
+		</div>
+
+		<div class="row-fluid">
+			<div class="row">
+				<div class="col-md-12 col-sm-12">
+					<div class="portlet blue-madison box">
+						<div class="portlet-title">
+							<div class="caption">
+								参数优化
+							</div>
+						</div>
+
+						<div class="portlet-body">
+
+							<form id="form" class=" form-horizontal" accept-charset="UTF-8"
+							action="@routes.UserController.changePassword()" autocomplete="off" method="post" style="margin-top: 30px;">
+
+								<div class="col-sm-offset-2">
+									<span class="error" style="line-height: 35px;">@request.flash.get("info")</span>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">参数优化任务名: </label>
+									<div class="col-sm-3">
+										<input class="form-control" name="missionName" value="@missionName" onfocus="inputSelect(this)">
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">任务:</label>
+									<div class="col-sm-3">
+										<select name="missionId" id="missionId" class="checkbox form-control" onchange="missionChange(this)">
+											<option></option>
+										</select>
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">化合物:</label>
+									<div class="col-sm-3">
+										<select name="compoundName" id="compoundName" class="checkbox form-control" onchange="ParamAdjust.compoundChange(this)">
+											<option></option>
+										</select>
+									</div>
+								</div>
+
+
+								<div class="form-group" style="margin-top: 50px">
+									<label class="control-label col-sm-2">
+										WS4PP<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="Window size for peak picking"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<div class="input-group ">
+											<input class="form-control" name="flMin" >
+											<span class="input-group-addon">To</span>
+											<input class="form-control" name="flMax" id="flMax" >
+											<span class="input-group-addon">By</span>
+											<input class="form-control" name="step" id="step" >
+										</div>
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										I4PP<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="Iteration for peak picking"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="iteration" id="iteration">
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										NUPS4PP<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="nups for peak picking"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="nups" id="nups">
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										NDOWNS4PP<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="ndowns for peak picking"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="ndowns" id="ndowns">
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										SNR4PP<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="SNR for peak picking"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="snr" id="snr">
+									</div>
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										BLine<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="Baseline correction"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<select class="form-control" name="bLine" required="required" style="border-radius: 4px;">
+											<option value="yes" selected>yes</option>
+											<option value="no" >no</option>
+										</select>
+									</div>
+
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										RT <span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="Remain time"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="rt">
+									</div>
+
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										RTLW<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="Remain time left window"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="rtlw">
+									</div>
+									<label class="control-label col-sm-2">
+										RTRW<span id="question5" style="margin-bottom: 5px">
+										<a type="button" title="说明" data-container="body" data-toggle="popover"
+										data-placement="right" data-content="Remain time right window"
+										data-trigger="hover"><i class="fa fa-question-circle-o" ></i></a>
+									</span>:</label>
+									<div class="col-sm-3">
+										<input class="form-control" name="rtrw">
+									</div>
+
+								</div>
+
+								<div class="form-group">
+									<label class="control-label col-sm-2">
+										Peak location:</label>
+									<div class="col-sm-3">
+										<select class="form-control" name="peakLocation" required="required" style="border-radius: 4px;">
+											<option value="nearest" >nearest</option>
+											<option value="largest" >largest</option>
+											<option value="first" >first</option>
+											<option value="all" selected>all</option>
+										</select>
+									</div>
+
+								</div>
+
+								<div class="form-group form-horizontal">
+									<div class="actions col-sm-offset-2 col-sm-2">
+										<button type="button" class="btn btn-primary" style="width: 90%;" id="search" onclick="myRun()">
+											开始运行</button>
+									</div>
+								</div>
+
+							</form>
+
+
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+			$(function () {
+
+				ParamAdjust.init
+
+				$.ajax({
+					url: "@routes.MissionController.getAllSuccessMissionNames()",
+					success: function (data) {
+						$("#missionId").select2(
+								{
+									data: data,
+									placeholder: "选择一个任务"
+								}
+						);
+						@if(missionId.isDefined){
+						$("#missionId").val("@missionId").select2()
+						$("#missionId").trigger("onchange")
+						}
+
+
+					}
+				});
+
+			})
+
+			function inputCheck() {
+				var min = $(":input[name='flMin']").val()
+				var max = $(":input[name='flMax'] ").val()
+				console.log(min, max)
+				var b = true
+				if (parseInt(min) > parseInt(max)) {
+					b = false
+					swal("Error", "平滑窗口最大值不能小于最小值!", "error")
+				}
+				return b
+			}
+
+			function myRun() {
+				var form = $("#form")
+				var fv = form.data("bootstrapValidator")
+				fv.validate()
+				if (fv.isValid() && inputCheck()) {
+					var element = "<div id='content'><span id='info'>" + zhRunning + "</span>&nbsp;<img class='runningImage' src='@routes.Assets.at("images/running2.gif")' style='width: 30px;height: 20px;'></div>"
+					var index = layer.alert(element, {
+						skin: 'layui-layer-molv'
+						, closeBtn: 0,
+						title: zhInfo,
+						btn: []
+					});
+					$.ajax({
+						url: "@routes.MissionController.paramAdjust()",
+						type: "post",
+						data: form.serialize(),
+						success: function (data) {
+							layer.close(index)
+							if (!data.valid) {
+								swal("Error", data.message, "error")
+							} else {
+								window.location.href = "@routes.MissionController.paramAdjustResultBefore()"
+							}
+						}
+					});
+
+				}
+
+			}
+
+			function missionChange(element) {
+				var value = $(element).find(">option:selected").val()
+				$.ajax({
+					url: "@routes.MissionController.getAllCompounds()?missionId=" + value,
+					success: function (data) {
+						$("#compoundName").select2(
+								{
+									data: data,
+									placeholder: "选择一个化合物"
+								}
+						);
+
+					}
+				});
+			}
+
+	</script>
+
+
+}

@@ -1,0 +1,310 @@
+@()(implicit request: RequestHeader)
+@admin.main("用户管理-TMBQ")("userManage") {
+	<div class="page-content">
+
+		<div class="page-bar">
+			<ul class="page-breadcrumb">
+				<li>
+					<i class="fa fa fa-table"></i>
+					<a href="">用户管理</a>
+				</li>
+			</ul>
+		</div>
+
+
+		<div class="row-fluid">
+			<div class="row">
+				<div class="col-md-12 col-sm-12">
+					<div class="portlet blue-madison box">
+						<div class="portlet-title">
+							<div class="caption">
+								用户管理
+							</div>
+						</div>
+
+						<div class="portlet-body">
+							<div class="table-responsive">
+
+								<div id="toolbar">
+									<button type="button" class="btn btn-primary" id="deleteButton" onclick="addShow()">
+										<i class="fa fa-plus"></i>&nbsp;新增用户
+									</button>
+								</div>
+
+								<table class="display table table-bordered" id="table" data-pagination="true" data-search="true"
+								data-toolbar="#toolbar" data-page-list="[10, 25, 50, 100, all]" data-multiple-search="true">
+									<thead>
+										<tr>
+											<th data-field="name" data-sortable="true">用户名</th>
+											<th data-field="createTime" data-sortable="true">创建时间</th>
+											<th data-field="operate" data-formatter="operateFmt">操作</th>
+										</tr>
+									</thead>
+								</table>
+
+								<div id="addModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+									<div class="modal-dialog" style="width: 800px">
+										<div class="modal-content">
+											<div class="modal-header bg-primary">
+												<button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
+												<h4 class="modal-title">
+													<i class="fa fa-plus"></i>
+													<span id="lblAddTitle" style="font-weight: bold">新增用户</span>
+												</h4>
+											</div>
+											<form class="form-horizontal" id="form" action="" data-toggle="validator" enctype="multipart/form-data">
+												<div class="modal-body">
+													<div class="row-fluid">
+
+														<div class="form-group">
+															<label class="control-label col-sm-3">用户名:</label>
+															<div class="col-sm-6">
+																<input class="form-control" name="name"/>
+															</div>
+														</div>
+
+														<div class="form-group">
+															<label class="control-label col-sm-3">密码:</label>
+															<div class="col-sm-6">
+																<input class="form-control" name="password" />
+															</div>
+														</div>
+
+													</div>
+												</div>
+												<div class="modal-footer bg-info">
+													<input type="hidden" id="ID" name="ID" />
+													<button type="button" class="btn blue" onclick="add()">确定</button>
+													<button type="button" class="btn green" data-dismiss="modal">取消</button>
+												</div>
+											</form>
+										</div>
+									</div>
+								</div>
+
+								<div id="updateModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+									<div class="modal-dialog" style="width: 650px">
+										<div class="modal-content">
+											<div class="modal-header bg-primary">
+												<button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
+												<h4 class="modal-title">
+													<i class="fa fa-repeat"></i>
+													<span id="lblAddTitle" style="font-weight: bold">重置密码</span>
+												</h4>
+											</div>
+											<form class="form-horizontal" id="updateForm" action="" data-toggle="validator">
+												<div class="modal-body">
+													<div class="row-fluid">
+
+														<div class="form-group">
+															<label class="control-label col-sm-3">用户名:</label>
+															<div class="col-sm-6">
+																<input class="form-control" name="name"  readonly/>
+															</div>
+														</div>
+
+
+														<div class="form-group">
+															<label class="control-label col-sm-3">密码:</label>
+															<div class="col-sm-6">
+																<input class="form-control" name="password" />
+															</div>
+														</div>
+
+													</div>
+												</div>
+												<div class="modal-footer bg-info">
+													<input type="hidden" id="id" name="id" />
+													<button type="button" class="btn blue" onclick="update()">
+														确定</button>
+													<button type="button" class="btn green" data-dismiss="modal">
+														取消</button>
+												</div>
+											</form>
+										</div>
+									</div>
+								</div>
+
+
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+
+		</div>
+
+	</div>
+
+
+	<script>
+			$(function () {
+
+				$.ajax({
+					url: "@routes.AdminController.getAllUser()",
+					type: "get",
+					dataType: "json",
+					success: function (data) {
+						$('#table').bootstrapTable({
+							data: data
+						});
+					}
+				})
+
+				bootstrapValidator()
+
+			})
+
+			function operateFmt(value, row, index) {
+				return "&nbsp;<a title='重置密码' onclick=\"resetShow('" + row.id + "')\" style='cursor: pointer;'><span><em class='fa fa-repeat'></em></span></a>"+
+				 "&nbsp;<a title='删除' onclick=\"deleteData('" + row.id + "')\" style='cursor: pointer;'><span><em class='fa fa-close'></em></span></a>"
+
+			}
+
+			function deleteData(id) {
+				swal({
+							title: "",
+							text: "确定要删除此数据吗？",
+							type: "warning",
+							showCancelButton: true,
+							showConfirmButton: true,
+							confirmButtonClass: "btn-danger",
+							confirmButtonText: "确定",
+							closeOnConfirm: false,
+							cancelButtonText: "取消"
+						},
+						function () {
+							$.ajax({
+								url: "@routes.AdminController.deleteUserById()?id="+id,
+								type: "get",
+								success: function (data) {
+									$('#table').bootstrapTable("load", data);
+									swal("成功！", "删除成功！", "success")
+								}
+							});
+						});
+			}
+
+
+			function addShow() {
+				$("#addModal").modal("show")
+			}
+
+			function add() {
+				var form = $("#form")
+				var fv = form.data("bootstrapValidator")
+				fv.validate()
+				if (fv.isValid()) {
+					var element = "<div id='content'><span id='info'>正在运行...</span>&nbsp;<img class='runningImage' src='/assets/images/running2.gif' style='width: 30px;height: 20px;'></div>"
+					var index = layer.alert(element, {
+						skin: 'layui-layer-molv'
+						, closeBtn: 0,
+						title: "信息",
+						btn: []
+					});
+					$.ajax({
+						url: "@routes.AdminController.addUser()",
+						type: "post",
+						data: form.serialize(),
+						success: function (data) {
+							layer.close(index)
+							$("#addModal").modal("hide")
+							fv.resetForm(true)
+							swal("成功！", "新增成功！", "success")
+							$('#table').bootstrapTable("load", data);
+
+						}
+					});
+				}
+			}
+
+			function resetShow(id) {
+				$.ajax({
+					url: "@routes.AdminController.getUserById()?id=" + id,
+					type: "get",
+					success: function (data) {
+						$("#updateForm input[name='name']").val(data.name)
+						$("#updateModal").modal("show")
+					}
+				});
+			}
+
+			function update() {
+				var form = $("#updateForm")
+				var fv = form.data("bootstrapValidator")
+				fv.validate()
+				if (fv.isValid()) {
+					$.ajax({
+						url: "@routes.AdminController.updateUser()",
+						type: "post",
+						data: $("#updateForm").serialize(),
+						success: function (data) {
+							$("#updateModal").modal("hide")
+							fv.resetForm(true)
+							swal("成功！", "密码重置成功！", "success")
+							$('#table').bootstrapTable("load", data);
+						}
+					});
+				}
+			}
+
+			function bootstrapValidator() {
+				$('#form').bootstrapValidator({
+					framework: 'bootstrap',
+					icon: {
+						valid: 'glyphicon glyphicon-ok',
+						invalid: 'glyphicon glyphicon-remove',
+						validating: 'glyphicon glyphicon-refresh'
+					},
+					fields: {
+						name: {
+							validators: {
+								notEmpty: {
+									message: '用户名不能为空！'
+								},
+								remote: {
+									message: "用户名已存在！",
+									url: "@routes.AdminController.userNameCheck()",
+									type: "POST",
+									delay: 1000
+								}
+							}
+						},
+						password: {
+							validators: {
+								notEmpty: {
+									message: '密码不能为空！'
+								},
+							}
+						},
+
+					}
+				});
+
+				$('#updateForm').bootstrapValidator({
+					framework: 'bootstrap',
+					icon: {
+						valid: 'glyphicon glyphicon-ok',
+						invalid: 'glyphicon glyphicon-remove',
+						validating: 'glyphicon glyphicon-refresh'
+					},
+					fields: {
+						password: {
+							validators: {
+								notEmpty: {
+									message: '密码不能为空！'
+								},
+							}
+						},
+					}
+				});
+
+			}
+
+
+
+	</script>
+
+
+}
