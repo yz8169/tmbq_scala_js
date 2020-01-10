@@ -18,6 +18,7 @@ import utils.Utils
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 /**
   * Created by yz on 2018/10/15

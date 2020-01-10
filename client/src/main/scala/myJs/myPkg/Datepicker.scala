@@ -1,13 +1,13 @@
 package myJs.myPkg
 
-import org.querki.jsext._
 
 import scala.scalajs.js
 import myJs.Tool._
-import org.querki.jquery.JQuery
 
 import scala.language.implicitConversions
 import scala.scalajs.js.JSConverters._
+import myJs.myPkg.jsext._
+import myJs.myPkg.jquery._
 
 
 /**

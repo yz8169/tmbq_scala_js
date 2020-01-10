@@ -1,9 +1,8 @@
 package myJs.myPkg
 
-import org.querki.jsext._
+import jsext._
 
 import scala.scalajs.js
-import myJs.Tool._
 
 /**
   * Created by yz on 2019/3/14
@@ -22,15 +21,13 @@ object LayerOptions extends LayerOptionsBuilder(noOpts)
 
 class LayerOptionsBuilder(val dict: OptMap) extends JSOptionBuilder[LayerOptions, LayerOptionsBuilder](new LayerOptionsBuilder(_)) {
 
-  def title(v: String=zhInfo) = jsOpt("title", v)
+  def title(v: String) = jsOpt("title", v)
 
   def closeBtn(v: Int) = jsOpt("closeBtn", v)
 
   def skin(v: String) = jsOpt("skin", v)
 
   def btn[T](v: js.Array[T]) = jsOpt("btn", v)
-
-  def maxWidth[T](v: Int) = jsOpt("maxWidth", v)
 
 }
 

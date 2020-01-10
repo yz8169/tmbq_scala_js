@@ -1,6 +1,6 @@
 package myJs.myPkg
 
-import org.querki.jsext._
+import jsext._
 
 import scala.scalajs.js
 import myJs.Utils._
@@ -10,10 +10,7 @@ import myJs.Utils._
   */
 package object Swal {
 
-  def swal(options: SwalOptions) = g.swal(options)
-
-  def swal(options: SwalOptions, f: js.Function) = g.swal(options, f)
-
+  def swal(options: SwalOptions)=g.swal(options)
 
 }
 
@@ -26,18 +23,6 @@ class SwalOptionsBuilder(val dict: OptMap) extends JSOptionBuilder[SwalOptions, 
   def title(v: String) = jsOpt("title", v)
 
   def `type`(v: String) = jsOpt("type", v)
-
-  def showCancelButton(v: Boolean) = jsOpt("showCancelButton", v)
-
-  def showConfirmButton(v: Boolean) = jsOpt("showConfirmButton", v)
-
-  def confirmButtonClass(v: String) = jsOpt("confirmButtonClass", v)
-
-  def confirmButtonText(v: String) = jsOpt("confirmButtonText", v)
-
-  def closeOnConfirm(v: Boolean) = jsOpt("closeOnConfirm", v)
-
-  def cancelButtonText(v: String) = jsOpt("cancelButtonText", v)
 
 }
 

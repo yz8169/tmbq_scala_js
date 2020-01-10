@@ -1,7 +1,5 @@
 package myJs.user
 
-import org.querki.jquery.{$, JQueryAjaxSettings}
-import org.querki.jquery.JQuery
 import org.scalajs.dom.raw.Element
 
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
@@ -11,6 +9,9 @@ import myJs.myPkg.{Swal, SwalOptions}
 import scala.collection.mutable.ArrayBuffer
 import scala.scalajs.js
 import myJs.utils.Implicits._
+
+import myJs.myPkg.jsext._
+import myJs.myPkg.jquery._
 
 /**
   * Created by yz on 2019/4/25

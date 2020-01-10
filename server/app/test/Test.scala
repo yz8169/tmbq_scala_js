@@ -20,7 +20,6 @@ import scala.collection.parallel.ForkJoinTaskSupport
 import scala.collection.parallel.immutable.ParRange
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.forkjoin.ForkJoinPool
 import utils.Implicits._
 
 import scala.collection.parallel.mutable.ParArray
@@ -31,16 +30,6 @@ import scala.collection.parallel.mutable.ParArray
 object Test {
 
   def main(args: Array[String]): Unit = {
-
-    val array = (1 to 10).toParArray
-    array.zipWithIndex.threadNum(2).map { case (i, j) =>
-      Thread.sleep(2000)
-      println(s"${i}\t${Thread.currentThread().getName}")
-    }
-
-    ParRange
-    ParArray
-
 
 
     //    val startTime = System.currentTimeMillis()

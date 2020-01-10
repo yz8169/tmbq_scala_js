@@ -5,6 +5,7 @@ import java.net.URLEncoder
 
 import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
 import akka.stream.Materializer
+import command.{CommandExec}
 import dao._
 import javax.inject.Inject
 import org.apache.commons.io.FileUtils
@@ -12,7 +13,7 @@ import org.apache.commons.lang3.StringUtils
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{AbstractController, ControllerComponents, WebSocket}
 import tool.Tool
-import utils.{CommandExecutor, MissionExecutor, Utils}
+import utils.Utils
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -26,16 +27,16 @@ import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
-import utils.Implicits._
-import utils.Pojo.{CommandData, IndexData}
-
 import scala.collection.parallel.ForkJoinTaskSupport
-import scala.concurrent.forkjoin.ForkJoinPool
+import implicits.Implicits._
+import mission.MissionUtils
+import tool.Pojo.{CommandData, IndexData}
+import scala.language.postfixOps
 
 
 /**
-  * Created by yz on 2018/9/18
-  */
+ * Created by yz on 2018/9/18
+ */
 class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, userDao: UserDao,
                                   accountDao: AccountDao, tool: Tool,
                                   missionDao: MissionDao, adjustMissionDao: AdjustMissionDao)(implicit val system: ActorSystem,
@@ -53,8 +54,8 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
     val row = MissionRow(0, s"${data.missionName}", userId, new DateTime(), None, "running")
     missionDao.insert(row).flatMap(_ => missionDao.selectByMissionName(row.userId, row.missionName)).map { mission =>
       val outDir = tool.getUserMissionDir
-      val missionExecutor = new MissionExecutor(mission.id, outDir)
-      val (tmpDir, resultDir) = (missionExecutor.workspaceDir, missionExecutor.resultDir)
+      val missionDir = MissionUtils.getMissionDir(mission.id, outDir)
+      val (tmpDir, resultDir) = (missionDir.workspaceDir, missionDir.resultDir)
       val dataDir = new File(tmpDir, "data")
       val tmpDataDir = new File(tmpDir, "tmpData")
       Utils.createDirectoryWhenNoExist(dataDir)
@@ -81,7 +82,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       }
 
       f.flatMap { x =>
-        val compoundLines = Utils.xlsx2Lines(compoundConfigFile)
+        val compoundLines = compoundConfigFile.xlsxLines()
         val threadNum = data.threadNum
         val indexDatas = compoundLines.lineMap.map { map =>
           IndexData(map("index"), map("compound"))
@@ -89,23 +90,22 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         val isIndexs = indexDatas.filter(x => x.index.startWithsIgnoreCase("is"))
 
         val logFile = new File(tmpDir.getParent, "log.txt")
-        val commandExecutor = new CommandExecutor(logFile)
-        commandExecutor.exec { () =>
+        val commandExecutor = CommandExec().parExec { b =>
           //is find peak
           Tool.isFindPeak(tmpDir, isIndexs, data.threadNum)
-        }.exec { () =>
+        }.exec { b =>
           //is merge
           Tool.isMerge(tmpDir, isIndexs)
-        }.exec { () =>
+        }.parExec { b =>
           //compound find peak
           Tool.cFindPeak(tmpDir, indexDatas, data.threadNum)
-        }.exec { () =>
+        }.exec { b =>
           //intensity merge
           Tool.intensityMerge(tmpDir)
-        }.exec { () =>
+        }.parExec { b =>
           //regress
           Tool.eachRegress(tmpDir, threadNum)
-        }.exec { () =>
+        }.exec { b =>
           //all merge
           Tool.allMerge(tmpDir)
         }
@@ -135,7 +135,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       }.onComplete {
         case Failure(exception) =>
           exception.printStackTrace()
-          FileUtils.writeStringToFile(missionExecutor.logFile, exception.toString)
+          FileUtils.writeStringToFile(missionDir.logFile, exception.toString)
           val newMission = mission.copy(state = "error", endTime = Some(new DateTime()))
           missionDao.update(newMission)
         case Success(x) =>
@@ -151,8 +151,8 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
     val row = MissionRow(0, s"${data.missionName}", userId, new DateTime(), None, "running")
     missionDao.insert(row).flatMap(_ => missionDao.selectByMissionName(row.userId, row.missionName)).map { mission =>
       val outDir = tool.getUserMissionDir
-      val missionExecutor = new MissionExecutor(mission.id, outDir)
-      val (tmpDir, resultDir) = (missionExecutor.workspaceDir, missionExecutor.resultDir)
+      val missionDir = MissionUtils.getMissionDir(mission.id, outDir)
+      val (tmpDir, resultDir) = (missionDir.workspaceDir, missionDir.resultDir)
       val dataDir = new File(tmpDir, "data")
       val tmpDataDir = new File(tmpDir, "tmpData")
       Utils.createDirectoryWhenNoExist(dataDir)
@@ -179,7 +179,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       }
 
       f.flatMap { x =>
-        val compoundLines = Utils.xlsx2Lines(compoundConfigFile)
+        val compoundLines = compoundConfigFile.xlsxLines()
         val threadNum = data.threadNum
         val indexDatas = compoundLines.lineMap.map { map =>
           IndexData(map("index"), map("compound"))
@@ -187,23 +187,22 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         val isIndexs = indexDatas.filter(x => x.index.startWithsIgnoreCase("is"))
 
         val logFile = new File(tmpDir.getParent, "log.txt")
-        val commandExecutor = new CommandExecutor(logFile)
-        commandExecutor.exec { () =>
+        val commandExecutor = CommandExec().parExec { b =>
           //is find peak
           Tool.isFindPeak(tmpDir, isIndexs, data.threadNum)
-        }.exec { () =>
+        }.exec { b =>
           //is merge
           Tool.isMerge(tmpDir, isIndexs)
-        }.exec { () =>
+        }.parExec { b =>
           //compound find peak
           Tool.cFindPeak(tmpDir, indexDatas, data.threadNum)
-        }.exec { () =>
+        }.exec { b =>
           //intensity merge
           Tool.intensityMerge(tmpDir)
-        }.exec { () =>
+        }.parExec { b =>
           //regress
           Tool.eachRegress(tmpDir, threadNum)
-        }.exec { () =>
+        }.exec { b =>
           //all merge
           Tool.allMerge(tmpDir)
         }
@@ -233,7 +232,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       }.onComplete {
         case Failure(exception) =>
           exception.printStackTrace()
-          FileUtils.writeStringToFile(missionExecutor.logFile, exception.toString)
+          FileUtils.writeStringToFile(missionDir.logFile, exception.toString)
           val newMission = mission.copy(state = "error", endTime = Some(new DateTime()))
           missionDao.update(newMission)
         case Success(x) =>
@@ -430,7 +429,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
     val fl = Json.obj("fl" -> compoundRow("ws4pp"), "snr" -> compoundRow("snr4pp"),
       "nups" -> compoundRow("nups4pp"), "ndowns" -> compoundRow("ndowns4pp"), "iteration" -> compoundRow("i4pp"),
       "bLine" -> compoundRow("bline"), "rtlw" -> compoundRow("rtlw"), "rtrw" -> compoundRow("rtrw"),
-      "rt" -> compoundRow("rt"),"peakLocation" -> compoundRow("peak_location").toLowerCase
+      "rt" -> compoundRow("rt"), "peakLocation" -> compoundRow("peak_location").toLowerCase
     )
     Ok(fl)
   }
@@ -456,30 +455,33 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
     val row = AdjustMissionRow(0, mission.missionName, data.compoundName, argStr, s"${data.missionName}", userId, new DateTime(), None, "running")
     adjustMissionDao.insert(row).flatMap(_ => adjustMissionDao.selectByMissionName(row.userId, row.missionName)).map { mission =>
       val outDir = tool.getUserAdjustMissionDir
-      val missionExecutor = new MissionExecutor(mission.id, outDir)
-      val (tmpDir, resultDir) = (missionExecutor.workspaceDir, missionExecutor.resultDir)
+      val missionDir = MissionUtils.getMissionDir(mission.id, outDir)
+      val (tmpDir, resultDir) = (missionDir.workspaceDir, missionDir.resultDir)
       val workspaceDir = tool.getWorkspaceDirById(data.missionId)
       val f = Future {
         FileUtils.copyFileToDirectory(new File(workspaceDir, "sample_config.xlsx"), tmpDir)
         FileUtils.copyFileToDirectory(new File(workspaceDir, "compound_config.xlsx"), tmpDir)
         FileUtils.copyDirectoryToDirectory(new File(workspaceDir, "dta"), tmpDir)
         val argsFile = new File(tmpDir, "args.txt")
-        val lines = ArrayBuffer(ArrayBuffer("compound", "flMin", "flMax", "step", "nups", "ndowns", "snr", "iteration", "bline", "rtlw", "rtrw","rt","peakLocation").mkString("\t"))
+        val lines = ArrayBuffer(ArrayBuffer("compound", "flMin", "flMax", "step", "nups", "ndowns", "snr", "iteration", "bline", "rtlw", "rtrw", "rt", "peakLocation").mkString("\t"))
         lines += (ArrayBuffer(data.compoundName, data.flMin, data.flMax, data.step, data.nups, data.ndowns, data.snr,
-          data.iteration, data.bLine, data.rtlw, data.rtrw,data.rt,data.peakLocation).mkString("\t"))
+          data.iteration, data.bLine, data.rtlw, data.rtrw, data.rt, data.peakLocation).mkString("\t"))
         FileUtils.writeLines(argsFile, lines.asJava)
         tool.productBaseRFile(tmpDir)
       }
 
       val command =
         s"""
-           |Rscript ${new File(Utils.rPath, "argsAdjust.R").toUnixPath}
+           |Rscript ${new File(Utils.rPath, "argsAdjust.R").unixPath}
        """.stripMargin
-      f.flatMap { _ =>
-        missionExecutor.exec(ArrayBuffer(command), () => {
+      f.map { _ =>
+        val commandExec = CommandExec().exec { b =>
+          CommandData(tmpDir, List(command))
+        }.map { b =>
           FileUtils.copyDirectoryToDirectory(new File(tmpDir, "plot_peaks"), resultDir)
-        })
-      }.flatMap { state =>
+        }
+        if (commandExec.isSuccess) "success" else "error"
+      }.map { state =>
         val newMission = mission.copy(state = state, endTime = Some(new DateTime()))
         adjustMissionDao.update(newMission)
       }

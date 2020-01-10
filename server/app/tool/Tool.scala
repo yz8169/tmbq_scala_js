@@ -16,18 +16,17 @@ import org.apache.commons.lang3.StringUtils
 import org.apache.poi.ss.usermodel.{Cell, DateUtil, FillPatternType, IndexedColors}
 import org.apache.poi.xssf.usermodel.{XSSFColor, XSSFWorkbook}
 import play.api.mvc.RequestHeader
-import utils.Pojo._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.forkjoin.ForkJoinPool
-import utils.Implicits._
+import scala.collection.parallel.CollectionConverters._
+import scala.collection.parallel.ForkJoinTaskSupport
+import implicits.Implicits._
+import tool.Pojo.{CommandData, IndexData}
 
-import scala.collection.parallel.mutable.ParArray
 
 
 /**
@@ -431,7 +430,7 @@ class Tool @Inject()(modeDao: ModeDao) {
           } else repeatMap(header) += column
         }
         if (header == "compound") {
-          val ILLEGAL_CHARACTERS = Array('/', '\n', '\r', '\t', '\0', '\f', '`', '?', '*', '\\', '<', '>', '|', '\"', ':')
+          val ILLEGAL_CHARACTERS = Array('/', '\n', '\r', '\t', '\u0000', '\f', '`', '?', '*', '\\', '<', '>', '|', '\"', ':')
           if (column.exists(ILLEGAL_CHARACTERS.contains(_))) {
             return MyMessage(false, s"物质信息配置文件第${i + 2}行第${j + 1}列出现特殊字符!")
           }
@@ -579,21 +578,30 @@ class Tool @Inject()(modeDao: ModeDao) {
 
 object Tool {
 
+  val dbName = "research_tmbq_database"
+  val playPath = new File("../").getAbsolutePath
+  val linuxPath = playPath + s"/${dbName}"
+
+  val rPath = {
+    val rPath = "C:\\workspaceForIDEA\\tmbq_scala_js\\server\\rScripts"
+    val linuxRPath = linuxPath + "/rScripts"
+    if (new File(rPath).exists()) rPath else linuxRPath
+  }
+
   def isFindPeak(tmpDir: File, isIndexs: Seq[IndexData], threadNum: Int) = {
     val isIndexPar = isIndexs.par.zipWithIndex
     isIndexPar.tasksupport = new ForkJoinTaskSupport(new ForkJoinPool(threadNum))
     val commandsPar = isIndexPar.map { case (indexData, i) =>
       val fileName = s"is_${i}"
-      val isDir = new File(tmpDir, fileName)
-      Utils.createDirectoryWhenNoExist(isDir)
+      val isDir = new File(tmpDir, fileName).createDirectoryWhenNoExist
       val compoundNameFile = new File(isDir, "compoundName.xlsx")
-      val newLines = ArrayBuffer("CompoundName", indexData.compoundName)
-      Utils.lines2Xlsx(newLines, compoundNameFile)
+      val newLines = List("CompoundName", indexData.compoundName)
+      newLines.toXlsxFile(compoundNameFile)
       val command =
         s"""
-           |Rscript ${new File(Utils.rPath, "isFindPeak.R").toUnixPath} --ci ${compoundNameFile.getName} --co color.txt --io intensity.txt
+           |Rscript ${new File(Tool.rPath, "isFindPeak.R").unixPath} --ci ${compoundNameFile.getName} --co color.txt --io intensity.txt
            """.stripMargin
-      CommandData(isDir, ArrayBuffer(command))
+      CommandData(isDir, List(command))
     }
     commandsPar.tasksupport = new ForkJoinTaskSupport(new ForkJoinPool(threadNum))
     commandsPar
@@ -606,32 +614,31 @@ object Tool {
     cIndexPar.tasksupport = new ForkJoinTaskSupport(new ForkJoinPool(threadNum))
     val commandsPar = cIndexPar.map { case (indexData, i) =>
       val fileName = s"c_${i}"
-      val cDir = new File(tmpDir, fileName)
-      Utils.createDirectoryWhenNoExist(cDir)
+      val cDir = new File(tmpDir, fileName).createDirectoryWhenNoExist
       val compoundNameFile = new File(cDir, "compoundName.xlsx")
-      val newLines = ArrayBuffer("CompoundName", indexData.compoundName)
-      Utils.lines2Xlsx(newLines, compoundNameFile)
+      val newLines = List("CompoundName", indexData.compoundName)
+      newLines.toXlsxFile(compoundNameFile)
       val command =
         s"""
-           |Rscript ${new File(Utils.rPath, "c_findPeak.R").toUnixPath} --ci ${compoundNameFile.getName} --co color.txt --io intensity.txt
+           |Rscript ${new File(Tool.rPath, "c_findPeak.R").unixPath} --ci ${compoundNameFile.getName} --co color.txt --io intensity.txt
            """.stripMargin
-      CommandData(cDir, ArrayBuffer(command))
+      CommandData(cDir, List(command))
     }
     commandsPar.tasksupport = new ForkJoinTaskSupport(new ForkJoinPool(threadNum))
     commandsPar
-
   }
 
   def eachRegress(tmpDir: File, threadNum: Int) = {
     val dirs = tmpDir.listFiles().filter(_.isDirectory).
-      filter(x => x.getName.startsWith("is_") || x.getName.startsWith("c_"))
+      filter(x => x.getName.startsWith("is_") || x.getName.startsWith("c_")).toList
     val commandsPar = dirs.map { dir =>
       val command =
         s"""
-           |Rscript ${new File(Utils.rPath, "each_regress.R").toUnixPath} --ci compoundName.xlsx  --coi color.txt --ro regress.txt
+           |Rscript ${new File(Tool.rPath, "each_regress.R").unixPath} --ci compoundName.xlsx  --coi color.txt --ro regress.txt
                           """.stripMargin
-      CommandData(dir, ArrayBuffer(command))
+      CommandData(dir, List(command))
     }.par
+
     commandsPar.threadNum(threadNum)
 
   }
@@ -640,30 +647,29 @@ object Tool {
   def intensityMerge(tmpDir: File) = {
     val command =
       s"""
-         |Rscript ${Utils.dosPath2Unix(new File(Utils.rPath, "intensity_merge.R"))}
+         |Rscript ${new File(Tool.rPath, "intensity_merge.R").unixPath}
            """.stripMargin
-    CommandData(tmpDir, ArrayBuffer(command))
-
+    CommandData(tmpDir, List(command))
   }
 
   def allMerge(tmpDir: File) = {
     val command =
       s"""
-         |Rscript ${Utils.dosPath2Unix(new File(Utils.rPath, "all_merge.R"))}
+         |Rscript ${new File(Tool.rPath, "all_merge.R").unixPath}
            """.stripMargin
-    CommandData(tmpDir, ArrayBuffer(command))
-
+    CommandData(tmpDir, List(command))
   }
+
 
   def isMerge(tmpDir: File, isIndexs: Seq[IndexData]) = {
     val command = if (isIndexs.isEmpty) {
       ""
     } else {
       s"""
-         |Rscript ${Utils.dosPath2Unix(new File(Utils.rPath, "is_rt_merge.R"))}
+         |Rscript ${new File(Tool.rPath, "is_rt_merge.R").unixPath}
            """.stripMargin
     }
-    CommandData(tmpDir, ArrayBuffer(command))
+    CommandData(tmpDir, List(command))
 
   }
 

@@ -1,13 +1,10 @@
 package myJs.myPkg
 
-import org.querki.jsext._
-
 import scala.scalajs.js
-import myJs.Tool._
-import org.querki.jquery.JQuery
-
 import scala.language.implicitConversions
 import scala.scalajs.js.JSConverters._
+import myJs.myPkg.jsext._
+import myJs.myPkg.jquery._
 
 
 /**
@@ -39,13 +36,16 @@ class TableOptionsBuilder(val dict: OptMap) extends JSOptionBuilder[TableOptions
     jsOpt("columns", fmtV)
   }
 
+  def columnsM(v: js.Array[js.Array[ColumnOptionsBuilder]]) = {
+    val fmtV = v.map(y => y.map(_.dict.toJSDictionary))
+    jsOpt("columns", fmtV)
+  }
+
   def exportOptions(v: ExportOptions) = jsOpt("exportOptions", v)
 
   def exportHiddenColumns(v: Boolean) = jsOpt("exportHiddenColumns", v)
 
   def onAll(v: js.Function) = jsOpt("onAll", v)
-
-  def onPageChange(v: js.Function) = jsOpt("onPageChange", v)
 
 
 }
@@ -86,6 +86,16 @@ class ColumnOptionsBuilder(val dict: OptMap) extends JSOptionBuilder[ColumnOptio
   def titleTooltip(v: String) = jsOpt("titleTooltip", v)
 
   def formatter(v: js.Function) = jsOpt("formatter", v)
+
+  def colspan(v: Int) = jsOpt("colspan", v)
+
+  def rowspan(v: Int) = jsOpt("rowspan", v)
+
+  def halign(v: String) = jsOpt("halign", v)
+
+  def valign(v: String) = jsOpt("valign", v)
+
+  def cellStyle(v: js.Function) = jsOpt("cellStyle", v)
 
   def checkbox(v: Boolean) = jsOpt("checkbox", v)
 

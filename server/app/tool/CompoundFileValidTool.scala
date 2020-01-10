@@ -2,6 +2,7 @@ package tool
 
 import cats.data.Validated
 import org.apache.commons.lang3.StringUtils
+import implicits.Implicits._
 
 /**
  * Created by Administrator on 2019/12/20

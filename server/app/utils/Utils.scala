@@ -65,16 +65,6 @@ object Utils {
   val vmatchDir = s"${playPath}/../perls/vmatch-2.3.0-Linux_x86_64-64bit"
   val cp = if (isWindows) "xcopy" else "cp"
 
-  def callLinuxScript(tmpDir: File, shBuffer: ArrayBuffer[String], shPrefix: String = "") = {
-    val execCommand = new ExecCommand
-    val runFile = new File(tmpDir, s"${shPrefix}run.sh")
-    FileUtils.writeLines(runFile, shBuffer.asJava)
-    val dos2Unix = s"${Utils.command2Wsl("dos2unix")} ${dosPath2Unix(runFile)} "
-    val shCommand = s"${Utils.command2Wsl("sh")} ${dosPath2Unix(runFile)}"
-    execCommand.exec(dos2Unix, shCommand, tmpDir)
-    execCommand
-  }
-
   def command2Wsl(command: String) = {
     if (isWindows) s"wsl ${command}" else command
   }
@@ -270,25 +260,6 @@ object Utils {
   def getPrefix(fileName: String): String = {
     val index = fileName.lastIndexOf(".")
     fileName.substring(0, index)
-  }
-
-  def callScript(tmpDir: File, shBuffer: ArrayBuffer[String]) = {
-    val execCommand = new ExecCommand
-    val runFile = if (Utils.isWindows) {
-      new File(tmpDir, "run.bat")
-    } else {
-      new File(tmpDir, "run.sh")
-    }
-    FileUtils.writeLines(runFile, shBuffer.asJava)
-    val shCommand = runFile.getAbsolutePath
-    if (Utils.isWindows) {
-      execCommand.exec(shCommand, tmpDir)
-    } else {
-      val useCommand = "chmod +x " + runFile.getAbsolutePath
-      val dos2Unix = "dos2unix " + runFile.getAbsolutePath
-      execCommand.exec(dos2Unix, useCommand, shCommand, tmpDir)
-    }
-    execCommand
   }
 
 

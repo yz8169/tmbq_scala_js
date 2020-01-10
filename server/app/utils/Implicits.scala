@@ -8,7 +8,6 @@ import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.collection.parallel.{ForkJoinTaskSupport, ParSeq}
 import scala.collection.parallel.mutable.ParArray
-import scala.concurrent.forkjoin.ForkJoinPool
 
 /**
   * Created by yz on 2019/4/25
@@ -62,16 +61,6 @@ object Implicits {
 
     def toFile(file: File, encoding: String = "UTF-8", append: Boolean = false) = {
       FileUtils.writeStringToFile(file, v, encoding, append)
-
-    }
-
-  }
-
-  implicit class MyParArray[T](pars: ParSeq[T]) {
-
-    def threadNum(t: Int) = {
-      pars.tasksupport = new ForkJoinTaskSupport(new ForkJoinPool(t))
-      pars
 
     }
 

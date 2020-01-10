@@ -3,12 +3,8 @@ package myJs
 import java.sql.Date
 import java.text.SimpleDateFormat
 
-import com.highcharts.CleanJsObject
-import com.highcharts.config.SeriesPieData
 import myJs.myPkg._
-import org.querki.jquery.$
 import org.scalajs.dom.raw.{Blob, BlobPropertyBag, ProgressEvent}
-import com.karasiq.bootstrap.Bootstrap.default._
 
 import scala.scalajs.js
 import scalatags.Text.all._
@@ -18,6 +14,7 @@ import scala.scalajs.js.{UndefOr, |}
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import org.scalajs.jquery.JQuery
 import myJs.myPkg.Implicits._
+import myJs.myPkg.jquery._
 
 
 /**
@@ -87,8 +84,6 @@ object Utils {
   }
 
   def any2undefOr[T](obj: T) = UndefOr.any2undefOrA(obj)
-
-  def seriesCfgData[T](obj: T) = obj.asInstanceOf[UndefOr[js.Array[CleanJsObject[SeriesPieData] | Double]]]
 
 
 }

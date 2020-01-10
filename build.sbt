@@ -32,6 +32,8 @@ lazy val server = (project in file("server")).settings(commonSettings).settings(
     "org.zeroturnaround" % "zt-zip" % "1.11",
     "org.typelevel" %% "cats-core" % "2.0.0",
     "com.github.tototoshi" %% "scala-csv" % "1.3.6",
+    "org.apache.commons" % "commons-lang3" % "3.6",
+    "org.scala-lang.modules" %% "scala-parallel-collections" % "0.2.0",
     
   )
 ).enablePlugins(PlayScala).dependsOn(sharedJvm)

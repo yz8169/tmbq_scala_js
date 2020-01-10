@@ -29,10 +29,6 @@ trait MyStringTool {
         replaceAll("G:", "/mnt/g")
     }
 
-    def startWithsIgnoreCase(prefix: String) = {
-      v.toLowerCase.startsWith(prefix.toLowerCase)
-    }
-
     def toFile(file: File, encoding: String = "UTF-8", append: Boolean = false): Unit = {
       FileUtils.writeStringToFile(file, v, encoding, append)
     }
@@ -89,6 +85,10 @@ trait MyStringTool {
 
     def replaceLf={
       v.replaceAll("\n"," ").replaceAll("\r"," ")
+    }
+
+    def startWithsIgnoreCase(prefix: String) = {
+      v.toLowerCase.startsWith(prefix.toLowerCase)
     }
 
   }
