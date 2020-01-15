@@ -9,9 +9,7 @@ import play.api.mvc.{AbstractController, ControllerComponents}
 import tool.Tool
 import utils.Utils
 
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.Failure

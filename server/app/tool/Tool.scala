@@ -18,8 +18,6 @@ import org.apache.poi.xssf.usermodel.{XSSFColor, XSSFWorkbook}
 import play.api.mvc.{MultipartFormData, Request, RequestHeader}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.parallel.CollectionConverters._
@@ -50,11 +48,10 @@ class Tool @Inject()(modeDao: ModeDao) {
   }
 
   def getCompoundDatas(compoundConfigFile: File) = {
-    val compoundLines = Utils.xlsx2Lines(compoundConfigFile)
+    val compoundLines = compoundConfigFile.xlsxLines()
     case class CompoundData(name: String, function: String, mz: Double, index: Int)
-    val headers = compoundLines.head.split("\t").map(_.toLowerCase)
-    val maps = compoundLines.drop(1).map { line =>
-      val columns = line.split("\t")
+    val headers = compoundLines.head.map(_.toLowerCase)
+    val maps = compoundLines.drop(1).map { columns =>
       headers.zip(columns).toMap
     }
     val mzMap = maps.map { map =>
@@ -78,33 +75,38 @@ class Tool @Inject()(modeDao: ModeDao) {
     }
   }
 
-  def getFtMap(file: File, functions: ArrayBuffer[String]) = {
+  def getFtMap(file: File, functions: List[String]) = {
     val lines = FileUtils.readLines(file).asScala
-    val map = mutable.LinkedHashMap[String, ArrayBuffer[String]]()
-    var key = ""
-    for (line <- lines) {
+
+    val acc = Vector[(String, String)]()
+    val map = lines.foldLeft((acc, "")) { (info, line) =>
       if (line.startsWith("FUNCTION")) {
-        key = line
-        map += (key -> ArrayBuffer[String]())
-      } else if (map.contains(key)) {
-        map(key) += line
+        (info._1, line)
+      } else {
+        val key = info._2
+        (info._1 :+ (key, line), key)
       }
+    }.accGroupMap
+
+    val ftMap = map.withFilter(x => functions.contains(x._1)).map { case (key, lines) =>
+      val acc = Vector[((Double, Double), Double)]()
+      val map = lines.filterNot(StringUtils.isBlank(_)).filterNot(_.startsWith("Scan")).
+        foldLeft((acc, 0.0)) { (info, line) =>
+          if (line.startsWith("Retention Time")) {
+            val timeKey = line.split("\t")(1).toDouble
+            (info._1, timeKey)
+          } else {
+            val timeKey = info._2
+            val columns = line.split("\t")
+            val t = (columns(0).toDouble, timeKey)
+            val value = columns(1).toDouble
+            val curT = (t, value)
+            (info._1 :+ curT, timeKey)
+          }
+        }.accGroupMap
+      (key, map)
     }
-    val ftMap = mutable.LinkedHashMap[String, mutable.Map[(Double, Double), ArrayBuffer[Double]]]()
-    map.withFilter(x => functions.contains(x._1)).foreach { case (key, lines) =>
-      var timeKey = 0.0
-      val map = mutable.LinkedHashMap[(Double, Double), ArrayBuffer[Double]]()
-      lines.filterNot(StringUtils.isBlank(_)).filterNot(_.startsWith("Scan")).foreach { line =>
-        if (line.startsWith("Retention Time")) {
-          timeKey = line.split("\t")(1).toDouble
-        } else {
-          val columns = line.split("\t")
-          val t = (columns(0).toDouble, timeKey)
-          if (map.isDefinedAt(t)) map(t) += columns(1).toDouble else map(t) = ArrayBuffer[Double](columns(1).toDouble)
-        }
-      }
-      ftMap(key) = map
-    }
+
     ftMap
   }
 
@@ -134,8 +136,7 @@ class Tool @Inject()(modeDao: ModeDao) {
   }
 
   def productDtaFiles(tmpDir: File, compoundConfigFile: File, dataDir: File, threadNum: Int) = {
-    val dtaDir = new File(tmpDir, "dta")
-    Utils.createDirectoryWhenNoExist(dtaDir)
+    val dtaDir = new File(tmpDir, "dta").createDirectoryWhenNoExist
     val compounds = getCompoundDatas(compoundConfigFile)
     val functions = compounds.map(x => s"FUNCTION ${x.function}")
     val files = dataDir.listFiles()
@@ -150,19 +151,19 @@ class Tool @Inject()(modeDao: ModeDao) {
           val ftMap = getFtMap(file, functions)
           compounds.foreach { compound =>
             val function = s"FUNCTION ${compound.function}"
-            val newLines = ArrayBuffer[String](s"#SEC\tMZ\tINT")
+            val headers = (s"#SEC\tMZ\tINT")
             val trueMz = ftMap(function).map { case ((mz, time), value) =>
               mz
             }.toBuffer.distinct.sortBy { x: Double => (compound.mz - x).abs }.head
-            newLines ++= ftMap(function).filter { case ((mz, time), value) =>
+            val ftLines = ftMap(function).filter { case ((mz, time), value) =>
               mz == trueMz
             }.map { case ((mz, time), values) =>
-              //          println(compound, compound.index, values, file)
               s"${time}\t${mz}\t${values(compound.index)}"
-            }.toBuffer
+            }.toList
+            val newLines = headers :: ftLines
             val dir = new File(dtaDir, compound.name)
-            Utils.createDirectoryWhenNoExist(dir)
-            val prefix = Utils.getPrefix(file)
+            dir.createDirectoryWhenNoExist
+            val prefix = file.namePrefix
             FileUtils.writeLines(new File(dir, s"${prefix}.dta"), newLines.asJava)
           }
         }
@@ -172,8 +173,7 @@ class Tool @Inject()(modeDao: ModeDao) {
   }
 
   def productAgilentDtaFiles(tmpDir: File, compoundConfigFile: File, dataDir: File, threadNum: Int) = {
-    val dtaDir = new File(tmpDir, "dta")
-    Utils.createDirectoryWhenNoExist(dtaDir)
+    val dtaDir = new File(tmpDir, "dta").createDirectoryWhenNoExist
     val compounds = getCompoundDatas(compoundConfigFile)
     val files = dataDir.listFiles()
     val finalThreadNum = threadNum
@@ -187,13 +187,13 @@ class Tool @Inject()(modeDao: ModeDao) {
           val ftMap = getAgilentFtMap(file)
           compounds.foreach { compound =>
             val function = s"${compound.function}"
-            val newLines = ArrayBuffer[String](s"#SEC\tMZ\tINT")
-            newLines ++= ftMap(function.toDouble).map { case (time, value) =>
+            val headers = (s"#SEC\tMZ\tINT")
+            val ftLines = ftMap(function.toDouble).map { case (time, value) =>
               s"${time}\t${compound.mz}\t${value}"
-            }
-            val dir = new File(dtaDir, compound.name)
-            Utils.createDirectoryWhenNoExist(dir)
-            val prefix = Utils.getPrefix(file)
+            }.toList
+            val newLines = headers :: ftLines
+            val dir = new File(dtaDir, compound.name).createDirectoryWhenNoExist
+            val prefix = file.namePrefix
             FileUtils.writeLines(new File(dir, s"${prefix}.dta"), newLines.asJava)
           }
         }
@@ -305,21 +305,14 @@ class Tool @Inject()(modeDao: ModeDao) {
   }
 
   def getCompoundMap(comoundConfigFile: File) = {
-    val lines = xlsx2Lines(comoundConfigFile)
-    lines.drop(1).map { line =>
-      getRowMap(lines(0), line)
+    val lines = comoundConfigFile.xlsxLines()
+    lines.drop(1).map { columns =>
+      getRowMap(lines.head, columns)
     }
   }
 
-  def getRowMap(header: String, line: String) = {
-    val headers = header.split("\t")
-    val columns = line.split("\t")
+  def getRowMap(headers: List[String], columns: List[String]) = {
     headers.zip(columns).toMap
-  }
-
-  def xlsx2Lines(xlsxFile: File) = {
-    val lines = Utils.xlsx2Lines(xlsxFile)
-    ArrayBuffer(lines(0).toLowerCase) ++= lines.drop(1)
   }
 
   def productBaseRFile(tmpDir: File) = {

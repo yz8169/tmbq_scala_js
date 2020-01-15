@@ -7,6 +7,7 @@ import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
 import akka.stream.Materializer
 import dao.AdjustMissionDao
 import javax.inject.Inject
+import models.Tables.AdjustMissionRow
 import org.apache.commons.io.FileUtils
 import org.zeroturnaround.zip.ZipUtil
 import play.api.libs.json.{JsValue, Json}
@@ -21,8 +22,8 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 
 /**
-  * Created by yz on 2018/10/15
-  */
+ * Created by yz on 2018/10/15
+ */
 class AdjustMissionController @Inject()(cc: ControllerComponents, formTool: FormTool, adjustMissionDao: AdjustMissionDao,
                                         tool: Tool)(implicit val system: ActorSystem,
                                                     implicit val materializer: Materializer) extends AbstractController(cc) {
@@ -70,17 +71,17 @@ class AdjustMissionController @Inject()(cc: ControllerComponents, formTool: Form
   def updateMissionSocket = WebSocket.accept[JsValue, JsValue] {
     implicit request =>
       val userId = tool.getUserId
-      var beforeMissions = Utils.execFuture(adjustMissionDao.selectAll(userId))
-      var currentMissions = beforeMissions
+      case class MissionAction(beforeMissions: Seq[AdjustMissionRow], action: String)
       ActorFlow.actorRef(out => Props(new Actor {
         override def receive: Receive = {
           case msg: JsValue if (msg \ "info").as[String] == "start" =>
+            val beforeMissions = Utils.execFuture(adjustMissionDao.selectAll(userId))
             out ! Utils.getJsonByTs(beforeMissions)
-            system.scheduler.scheduleOnce(3 seconds, self, Json.obj("info" -> "update"))
-          case msg: JsValue if (msg \ "info").as[String] == "update" =>
+            system.scheduler.scheduleOnce(3 seconds, self, MissionAction(beforeMissions, "update"))
+          case MissionAction(beforeMissions, action) =>
             adjustMissionDao.selectAll(userId).map {
               missions =>
-                currentMissions = missions
+                val currentMissions = missions
                 if (currentMissions.size != beforeMissions.size) {
                   out ! Utils.getJsonByTs(currentMissions)
                 } else {
@@ -92,7 +93,6 @@ class AdjustMissionController @Inject()(cc: ControllerComponents, formTool: Form
                     out ! Utils.getJsonByTs(currentMissions)
                   }
                 }
-                beforeMissions = currentMissions
                 system.scheduler.scheduleOnce(3 seconds, self, Json.obj("info" -> "update"))
             }
           case _ =>

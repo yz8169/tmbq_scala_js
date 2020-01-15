@@ -22,11 +22,10 @@ import org.apache.commons.codec.binary.Base64
 import play.api.libs.json.Json
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 //import scala.math.log10
+import implicits.Implicits._
 
 object Utils {
 
@@ -75,24 +74,6 @@ object Utils {
     val path = file.getAbsolutePath
     path.replace("\\", "/").replaceAll("D:", "/mnt/d").
       replaceAll("E:", "/mnt/e").replaceAll("C:", "/mnt/c")
-  }
-
-
-  def getAllFiles(file: File): ArrayBuffer[File] = {
-    val files = ArrayBuffer[File]()
-
-    def loop(file: File): ArrayBuffer[File] = {
-      for (f <- file.listFiles()) {
-        if (f.isDirectory) {
-          loop(f)
-        } else {
-          files += f
-        }
-      }
-      files
-    }
-
-    loop(file)
   }
 
 
@@ -297,88 +278,6 @@ object Utils {
     }
   }
 
-  def xlsx2Txt(xlsxFile: File, txtFile: File) = {
-    val lines = xlsx2Lines(xlsxFile)
-    FileUtils.writeLines(txtFile, lines.asJava)
-  }
-
-  def removeXlsxBlankLine(file: File) = {
-    val lines = Utils.xlsx2Lines(file)
-    Utils.lines2Xlsx(lines, file)
-  }
-
-  def xlsx2Lines(xlsxFile: File) = {
-    val is = new FileInputStream(xlsxFile.getAbsolutePath)
-    val xssfWorkbook = new XSSFWorkbook(is)
-    val xssfSheet = xssfWorkbook.getSheetAt(0)
-    val lines = ArrayBuffer[String]()
-    for (i <- 0 to xssfSheet.getLastRowNum) {
-      val xssfRow = xssfSheet.getRow(i)
-      val columns = ArrayBuffer[String]()
-      val firstRow = xssfSheet.getRow(0)
-      for (j <- 0 until firstRow.getLastCellNum) {
-        val cell = xssfRow.getCell(j)
-        var value = ""
-        if (cell != null) {
-          cell.getCellType match {
-            case Cell.CELL_TYPE_STRING =>
-              value = cell.getStringCellValue
-            case Cell.CELL_TYPE_NUMERIC =>
-              if (DateUtil.isCellDateFormatted(cell)) {
-                val dateFormat = new SimpleDateFormat("yyyy/MM/dd")
-                value = dateFormat.format(cell.getDateCellValue)
-              } else {
-                val doubleValue = cell.getNumericCellValue
-                value = if (doubleValue == doubleValue.toInt) {
-                  doubleValue.toInt.toString
-                } else doubleValue.toString
-              }
-            case Cell.CELL_TYPE_BLANK =>
-              value = ""
-            case _ =>
-              value = ""
-          }
-        }
-
-        columns += value.trim
-      }
-      val line = columns.mkString("\t")
-      lines += line
-    }
-    xssfWorkbook.close()
-    lines.filter(StringUtils.isNotBlank(_))
-  }
-
-  def txt2Xlsx(txtFile: File, xlsxFile: File) = {
-    val lines = FileUtils.readLines(txtFile).asScala
-    lines2Xlsx(lines, xlsxFile)
-  }
-
-  def lines2Xlsx(lines: mutable.Buffer[String], xlsxFile: File) = {
-    val outputWorkbook = new XSSFWorkbook()
-    val outputSheet = outputWorkbook.createSheet("Sheet1")
-    for (i <- 0 until lines.size) {
-      val outputEachRow = outputSheet.createRow(i)
-      val line = lines(i)
-      val columns = line.split("\t")
-      for (j <- 0 until columns.size) {
-        var cell = outputEachRow.createCell(j)
-        if (Utils.isDouble(columns(j))) {
-          cell.setCellValue(columns(j).toDouble)
-        } else {
-          cell.setCellValue(columns(j))
-        }
-
-      }
-    }
-
-    val fileOutputStream = new FileOutputStream(xlsxFile)
-    outputWorkbook.write(fileOutputStream)
-    fileOutputStream.close()
-    outputWorkbook.close()
-  }
-
-
   def lfJoin(seq: Seq[String]) = {
     seq.mkString("\n")
   }
@@ -455,12 +354,11 @@ object Utils {
     val sampleNames = lines.head.split("\t").drop(1)
     val array = lines.drop(1).map { line =>
       val columns = line.split("\t")
-      val map = mutable.Map[String, String]()
-      map += ("geneId" -> columns(0))
-      sampleNames.zip(columns.drop(1)).foreach { case (sampleName, data) =>
-        map += (sampleName -> data)
-      }
-      map
+      val map = Map(("geneId" -> columns(0)))
+      val otherMap = sampleNames.zip(columns.drop(1)).map { case (sampleName, data) =>
+        (sampleName -> data)
+      }.toMap
+      map ++ otherMap
     }
     Json.obj("array" -> array, "sampleNames" -> sampleNames)
   }
@@ -479,28 +377,18 @@ object Utils {
     FileUtils.writeLines(file, lines.asJava)
   }
 
-
-  //  def pdf2png(tmpDir: File, fileName: String) = {
-  //    val pdfFile = new File(tmpDir, fileName)
-  //    val outFileName = fileName.substring(0, fileName.lastIndexOf(".")) + ".png"
-  //    val outFile = new File(tmpDir, outFileName)
-  //    val document = PDDocument.load(pdfFile)
-  //    val renderer = new PDFRenderer(document)
-  //    ImageIO.write(renderer.renderImage(0, 3), "png", outFile)
-  //    document.close()
-  //  }
-  //
   def getInfoByFile(file: File) = {
-    val lines = FileUtils.readLines(file).asScala
-    val columnNames = lines.head.split("\t").drop(1)
+    val lines = file.lines
+    getInfoByLines(lines)
+  }
+
+  def getInfoByLines(lines: List[String]) = {
+    val columnNames = lines.head.split("\t")
     val array = lines.drop(1).map { line =>
-      val columns = line.split("\t")
-      val map = mutable.Map[String, String]()
-      map += ("geneId" -> columns(0))
-      columnNames.zip(columns.drop(1)).foreach { case (columnName, data) =>
-        map += (columnName -> data)
+      val columns = line.split("\t").map { x =>
+        x.replaceAll("^\"", "").replaceAll("\"$", "")
       }
-      map
+      columnNames.zip(columns).toMap
     }
     (columnNames, array)
   }

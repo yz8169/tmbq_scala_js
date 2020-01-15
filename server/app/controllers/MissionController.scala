@@ -13,12 +13,10 @@ import org.apache.commons.io.FileUtils
 import org.apache.commons.lang3.StringUtils
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{AbstractController, ControllerComponents, WebSocket}
-import tool.{FileTool, Tool}
+import tool.{FileTool, Tool, WebTool}
 import utils.Utils
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 import models.Tables._
 import org.joda.time.DateTime
 import org.zeroturnaround.zip.ZipUtil
@@ -68,14 +66,14 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       val sampleConfigExcelFile = new File(tmpDir, "sample_config.xlsx")
       val sampleConfigTempFile = request.body.file("sampleConfigFile").get
       sampleConfigTempFile.ref.moveTo(sampleConfigExcelFile, replace = true)
-      Utils.removeXlsxBlankLine(sampleConfigExcelFile)
+      sampleConfigExcelFile.removeEmptyLine
       val compoundConfigFile = new File(tmpDir, "compound_config.xlsx")
       val compoundConfigTempFile = request.body.file("compoundConfigFile").get
       compoundConfigTempFile.ref.moveTo(compoundConfigFile, replace = true)
-      Utils.removeXlsxBlankLine(compoundConfigFile)
+      compoundConfigFile.removeEmptyLine
       val f = Future {
         Utils.unpack(file, tmpDataDir)
-        Utils.getAllFiles(tmpDataDir).foreach { file =>
+        tmpDataDir.allFiles.foreach { file =>
           val destFile = new File(dataDir, file.getName.toLowerCase)
           FileUtils.copyFile(file, destFile)
         }
@@ -115,7 +113,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         val state = if (commandExecutor.isSuccess) {
           val intensityTxtFile = new File(tmpDir, "intensity.txt")
           val intensityExcelFile = new File(resultDir, "intensity.xlsx")
-          Utils.txt2Xlsx(intensityTxtFile, intensityExcelFile)
+          intensityTxtFile.toXlsxFile(intensityExcelFile)
           val regressTxtFile = new File(tmpDir, "regress.txt")
           val regressColorFile = new File(tmpDir, "color.txt")
           val regressExcelFile = new File(resultDir, "concentration.xlsx")
@@ -167,14 +165,14 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
       val sampleConfigExcelFile = new File(tmpDir, "sample_config.xlsx")
       val sampleConfigTempFile = request.body.file("sampleConfigFile").get
       sampleConfigTempFile.ref.moveTo(sampleConfigExcelFile, replace = true)
-      Utils.removeXlsxBlankLine(sampleConfigExcelFile)
+      sampleConfigExcelFile.removeEmptyLine
       val compoundConfigFile = new File(tmpDir, "compound_config.xlsx")
       val compoundConfigTempFile = request.body.file("compoundConfigFile").get
       compoundConfigTempFile.ref.moveTo(compoundConfigFile, replace = true)
-      Utils.removeXlsxBlankLine(compoundConfigFile)
+      compoundConfigFile.removeEmptyLine
       val f = Future {
         Utils.unpack(file, tmpDataDir)
-        Utils.getAllFiles(tmpDataDir).foreach { file =>
+        tmpDataDir.allFiles.foreach { file =>
           val destFile = new File(dataDir, file.getName.toLowerCase)
           FileUtils.copyFile(file, destFile)
         }
@@ -212,7 +210,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         val state = if (commandExecutor.isSuccess) {
           val intensityTxtFile = new File(tmpDir, "intensity.txt")
           val intensityExcelFile = new File(resultDir, "intensity.xlsx")
-          Utils.txt2Xlsx(intensityTxtFile, intensityExcelFile)
+          intensityTxtFile.toXlsxFile(intensityExcelFile)
           val regressTxtFile = new File(tmpDir, "regress.txt")
           val regressColorFile = new File(tmpDir, "color.txt")
           val regressExcelFile = new File(resultDir, "concentration.xlsx")
@@ -304,30 +302,29 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
   def updateMissionSocket = WebSocket.accept[JsValue, JsValue] {
     implicit request =>
       val userId = tool.getUserId
-      var beforeMissions = Utils.execFuture(missionDao.selectAll(userId))
-      var currentMissions = beforeMissions
+      case class MissionAction(beforeMissions: Seq[MissionRow], action: String)
       ActorFlow.actorRef(out => Props(new Actor {
         override def receive: Receive = {
           case msg: JsValue if (msg \ "info").as[String] == "start" =>
-            out ! Utils.getJsonByTs(beforeMissions)
-            system.scheduler.scheduleOnce(3 seconds, self, Json.obj("info" -> "update"))
-          case msg: JsValue if (msg \ "info").as[String] == "update" =>
+            val beforeMissions = Utils.execFuture(missionDao.selectAll(userId))
+            out ! WebTool.getJsonByTs(beforeMissions)
+            system.scheduler.scheduleOnce(3 seconds, self, MissionAction(beforeMissions, "update"))
+          case MissionAction(beforeMissions, action) =>
             missionDao.selectAll(userId).map {
               missions =>
-                currentMissions = missions
+                val currentMissions = missions
                 if (currentMissions.size != beforeMissions.size) {
-                  out ! Utils.getJsonByTs(currentMissions)
+                  out ! WebTool.getJsonByTs(currentMissions)
                 } else {
                   val b = currentMissions.zip(beforeMissions).forall {
                     case (currentMission, beforeMission) =>
                       currentMission.id == beforeMission.id && currentMission.state == beforeMission.state
                   }
                   if (!b) {
-                    out ! Utils.getJsonByTs(currentMissions)
+                    out ! WebTool.getJsonByTs(currentMissions)
                   }
                 }
-                beforeMissions = currentMissions
-                system.scheduler.scheduleOnce(3 seconds, self, Json.obj("info" -> "update"))
+                system.scheduler.scheduleOnce(3 seconds, self, MissionAction(currentMissions, "update"))
             }
           case _ =>
             self ! PoisonPill
@@ -336,7 +333,6 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         override def postStop(): Unit = {
           self ! PoisonPill
         }
-
       }))
 
   }
@@ -434,7 +430,7 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
     val data = formTool.paramAdjustForm.bindFromRequest().get
     val userId = tool.getUserId
     val mission = Utils.execFuture(missionDao.selectByMissionId(userId, data.missionId))
-    val args = ArrayBuffer(
+    val args = List(
       s"WS4PP:${data.flMin} to ${data.flMax} by ${data.step}",
       s"I4PP:${data.iteration}",
       s"NUPS4PP:${data.nups}",
@@ -458,10 +454,10 @@ class MissionController @Inject()(cc: ControllerComponents, formTool: FormTool, 
         FileUtils.copyFileToDirectory(new File(workspaceDir, "compound_config.xlsx"), tmpDir)
         FileUtils.copyDirectoryToDirectory(new File(workspaceDir, "dta"), tmpDir)
         val argsFile = new File(tmpDir, "args.txt")
-        val lines = ArrayBuffer(ArrayBuffer("compound", "flMin", "flMax", "step", "nups", "ndowns", "snr", "iteration", "bline", "rtlw", "rtrw", "rt", "peakLocation").mkString("\t"))
-        lines += (ArrayBuffer(data.compoundName, data.flMin, data.flMax, data.step, data.nups, data.ndowns, data.snr,
-          data.iteration, data.bLine, data.rtlw, data.rtrw, data.rt, data.peakLocation).mkString("\t"))
-        FileUtils.writeLines(argsFile, lines.asJava)
+        val headers = List("compound", "flMin", "flMax", "step", "nups", "ndowns", "snr", "iteration", "bline", "rtlw", "rtrw", "rt", "peakLocation")
+        val lines = headers :: List(List(data.compoundName, data.flMin, data.flMax, data.step, data.nups, data.ndowns, data.snr,
+          data.iteration, data.bLine, data.rtlw, data.rtrw, data.rt, data.peakLocation))
+        lines.toTxtFile(argsFile)
         tool.productBaseRFile(tmpDir)
       }
       val logFile = Tool.getLogFile(tmpDir.getParentFile)

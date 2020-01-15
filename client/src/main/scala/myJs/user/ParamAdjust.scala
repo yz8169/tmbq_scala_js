@@ -6,7 +6,6 @@ import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import myJs.Utils._
 import myJs.myPkg.{Swal, SwalOptions}
 
-import scala.collection.mutable.ArrayBuffer
 import scala.scalajs.js
 import myJs.utils.Implicits._
 
@@ -37,10 +36,10 @@ object ParamAdjust {
       $(":input[name='flMin']").`val`(rs("fl").toString)
       $(":input[name='flMax']").`val`(rs("fl").toString)
       $(":input[name='step']").`val`("2")
-      ArrayBuffer("snr", "nups", "ndowns", "iteration", "bLine", "rtlw", "rtrw","rt","peakLocation").foreach { x =>
+      List("snr", "nups", "ndowns", "iteration", "bLine", "rtlw", "rtrw","rt","peakLocation").foreach { x =>
         $(s":input[name='${x}']").`val`(rs(x))
       }
-      ArrayBuffer("flMin", "flMax", "step", "snr", "nups", "ndowns", "iteration", "rtlw", "rtrw","rt").foreach { x =>
+      List("flMin", "flMax", "step", "snr", "nups", "ndowns", "iteration", "rtlw", "rtrw","rt").foreach { x =>
         g.$("#form").bootstrapValidator("revalidateField", x)
       }
     }

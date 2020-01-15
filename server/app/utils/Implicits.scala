@@ -4,10 +4,8 @@ import java.io.File
 
 import org.apache.commons.io.FileUtils
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.collection.parallel.{ForkJoinTaskSupport, ParSeq}
-import scala.collection.parallel.mutable.ParArray
 
 /**
   * Created by yz on 2019/4/25
@@ -19,29 +17,6 @@ object Implicits {
     def toUnixPath = {
       val path = file.getAbsolutePath
       path.toUnixPath
-    }
-
-  }
-
-  implicit class MyLines(lines: mutable.Buffer[String]) {
-
-    def toLowerCase = {
-      lines.map(_.toLowerCase)
-    }
-
-    def headers = lines.head.split("\t")
-
-    def lineMap = {
-      lines.drop(1).map { line =>
-        val columns = line.split("\t")
-        headers.map(_.toLowerCase).zip(columns).toMap
-      }
-
-    }
-
-    def toFile(file: File, append: Boolean = false, encoding: String = "UTF-8") = {
-      FileUtils.writeLines(file, encoding, lines.asJava, append)
-
     }
 
   }

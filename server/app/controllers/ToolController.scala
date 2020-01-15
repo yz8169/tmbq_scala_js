@@ -9,13 +9,13 @@ import play.api.libs.json.Json
 import play.api.mvc.{AbstractController, ControllerComponents}
 import tool.Tool
 import utils.Utils
+import implicits.Implicits._
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.collection.mutable.ArrayBuffer
 
 /**
-  * Created by yz on 2018/10/22
-  */
+ * Created by yz on 2018/10/22
+ */
 class ToolController @Inject()(cc: ControllerComponents, tool: Tool, formTool: FormTool) extends AbstractController(cc) {
 
   def unitConversionBefore = Action { implicit request =>
@@ -31,19 +31,16 @@ class ToolController @Inject()(cc: ControllerComponents, tool: Tool, formTool: F
     val unit = data.unit
     val toUnit = data.toUnit
     val standardUnit = tool.standardUnit
-    val noMwUnits = ArrayBuffer("nM", "uM", "mM", "nmol/g", "nmol/mg", "pmol/mg", "umol/mg", "umol/g")
-    val mwUnits = ArrayBuffer("g/mL", "mg/mL", "mg/g", "ug/mL", "ug/g", "ug/uL", "ug/L", "ng/g", "ppm", "ppb", "ng/mL", "ppt")
+    val noMwUnits = List("nM", "uM", "mM", "nmol/g", "nmol/mg", "pmol/mg", "umol/mg", "umol/g")
+    val mwUnits = List("g/mL", "mg/mL", "mg/g", "ug/mL", "ug/g", "ug/uL", "ug/L", "ng/g", "ppm", "ppb", "ng/mL", "ppt")
     val noMwMap = tool.getNoMwMap
-    val lines = Utils.xlsx2Lines(file).map(_.split("\t"))
-
-    val newLines = ArrayBuffer(lines.head)
-    newLines += lines(1)
+    val lines = file.xlsxLines()
     var message = ""
     try {
-      newLines ++= lines.drop(2).zipWithIndex.map { case (columns, i) =>
+      val newLines = lines.head :: List(lines(1)) ::: lines.drop(2).zipWithIndex.map { case (columns, i) =>
         columns.take(data.fromC - 1) ++ columns.drop(data.fromC - 1).zipWithIndex.map { case (value, tmpj) =>
           val j = tmpj + data.fromC - 1
-          val unitArray = ArrayBuffer(unit, toUnit)
+          val unitArray = List(unit, toUnit)
           val mw = if (unitArray.intersect(noMwUnits).size == 2 || unitArray.intersect(mwUnits).size == 2) {
             1
           } else {
@@ -73,12 +70,10 @@ class ToolController @Inject()(cc: ControllerComponents, tool: Tool, formTool: F
             }
             finalValue.toString
           }
-
-
         }
       }
       val resultFile = new File(tmpDir, "result.xlsx")
-      Utils.lines2Xlsx(newLines.map(_.mkString("\t")), resultFile)
+      newLines.toXlsxFile(resultFile)
       val base64 = Utils.getBase64Str(resultFile)
       tool.deleteDirectory(tmpDir)
       Ok(Json.obj("valid" -> true, "data" -> base64)).as("application/json")

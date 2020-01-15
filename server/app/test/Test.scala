@@ -14,15 +14,12 @@ import org.zeroturnaround.zip.ZipUtil
 import utils.Utils
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.parallel.ForkJoinTaskSupport
 import scala.collection.parallel.immutable.ParRange
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import utils.Implicits._
 
-import scala.collection.parallel.mutable.ParArray
 
 /**
   * Created by yz on 2018/9/4
@@ -94,78 +91,6 @@ object Test {
     //    println(arrayBuffer.size)
     //    FileUtils.writeLines(new File("E:\\code.txt"), arrayBuffer.asJava)
 
-  }
-
-  def getCompoundDatas(compoundConfigFile: File) = {
-    val compoundLines = Utils.xlsx2Lines(compoundConfigFile)
-    case class CompoundData(name: String, function: String, mz: Double, index: Int)
-    val headers = compoundLines.head.split("\t").map(_.toLowerCase)
-    val maps = compoundLines.drop(1).map { line =>
-      val columns = line.split("\t")
-      headers.zip(columns).toMap
-    }
-    val mzMap = maps.map { map =>
-      val mzs = map("mass").split(">")
-      val mz1 = if (mzs.size == 1) 0.0 else mzs(1).toDouble
-      val function = map("function")
-      ((function, mzs(0).toDouble), mz1)
-    }.distinct.groupBy(_._1).mapValues(x => x.map(_._2).sorted)
-    maps.map { map =>
-      val name = map("compound")
-      val function = map("function")
-      val mzs = map("mass").split(">")
-      val mz = mzs(0).toDouble
-      val index = if (mzs.size == 1) {
-        0
-      } else {
-        val mz1 = mzs(1).toDouble
-        mzMap((function, mz)).indexOf(mz1)
-      }
-      CompoundData(name, function, mz, index)
-    }
-  }
-
-  def getFtMap(file: File, functions: ArrayBuffer[String]) = {
-    val lines = FileUtils.readLines(file).asScala
-    val map = mutable.Map[String, ArrayBuffer[String]]()
-    var key = ""
-    for (line <- lines) {
-      if (line.startsWith("FUNCTION")) {
-        key = line
-        map += (key -> ArrayBuffer[String]())
-      } else if (map.contains(key)) {
-        map(key) += line
-      }
-    }
-    val ftMap = mutable.Map[String, mutable.Map[(Double, Double), ArrayBuffer[Double]]]()
-    map.withFilter(x => functions.contains(x._1)).foreach { case (key, lines) =>
-      var timeKey = 0.0
-      val map = mutable.Map[(Double, Double), ArrayBuffer[Double]]()
-      lines.filterNot(StringUtils.isBlank(_)).filterNot(_.startsWith("Scan")).foreach { line =>
-        if (line.startsWith("Retention Time")) {
-          timeKey = line.split("\t")(1).toDouble
-        } else {
-          val columns = line.split("\t")
-          val t = (columns(0).toDouble, timeKey)
-          if (map.isDefinedAt(t)) map(t) += columns(1).toDouble else map(t) = ArrayBuffer[Double](columns(1).toDouble)
-        }
-      }
-      ftMap(key) = map
-    }
-    ftMap
-  }
-
-  val arrayBuffer = ArrayBuffer[String]()
-
-  def getLines(file: File): ArrayBuffer[String] = {
-    for (f <- file.listFiles()) {
-      if (f.isDirectory) {
-        getLines(f)
-      } else {
-        arrayBuffer ++= FileUtils.readLines(f).asScala
-      }
-    }
-    arrayBuffer
   }
 
 
